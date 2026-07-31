@@ -1,0 +1,17 @@
+# 路由規則。順序有意義 —— 引擎由上往下讀，第一條命中就停止。
+#
+# 為什麼兩條都放這裡，而不是把 /api/* 留在 netlify.toml：
+# Netlify 的處理順序是「_redirects 全部規則」→「netlify.toml 全部規則」。
+# 分開放的話，下面的 /* 會在 netlify.toml 被讀到之前就接走 /api/*，
+# 於是每一支 API 都拿到 index.html（HTTP 200 或 404 的 HTML），
+# 前端解析 JSON 失敗，錯誤訊息完全不會指向 redirect 設定。
+#
+# 這個檔案放在 public/，會被 Vite 原樣複製進建置產物，只在正式環境生效。
+
+# API 轉給 Netlify 函式。結尾的 ! 表示強制套用，不讓同名靜態檔搶先。
+/api/*    /.netlify/functions/api/:splat    200!
+
+# SPA 收尾：wouter 用 URL 路由（/analysis?keyword=…），直接貼網址或重新整理時
+# 靜態主機上沒有對應檔案，必須回 index.html 讓前端自己解析路徑。
+# 必須排在 /api/* 之後，否則會把 API 請求一併吃掉。
+/*        /index.html                        200

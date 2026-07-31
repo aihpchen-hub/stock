@@ -1,0 +1,56 @@
+[build]
+  # 只建置要發佈的前端；typecheck 涵蓋整個 workspace（含函式會用到的 api-server）。
+  # 刻意不跑 api-server 的 esbuild 打包 —— 函式由 Netlify 自己從原始碼 bundle，
+  # 那份 dist 在這裡沒有人會用到，建了只是多花 build 額度。
+  command = "pnpm run typecheck && pnpm --filter @workspace/web run build"
+  publish = "artifacts/web/dist/public"
+
+[build.environment]
+  # 專案用 Node 24。Netlify 的預設版本不一定相同，明確指定才不會因為執行環境
+  # 差異而出現「本機好好的、線上壞掉」。
+  NODE_VERSION = "24"
+  # 刻意不設 NODE_ENV=production：那會讓 pnpm 跳過 devDependencies，
+  # 而 vite 與 typescript 都在 devDependencies 裡，建置會直接失敗。
+
+[functions]
+  # 函式刻意放在 artifacts/api-server 底下，不在 repo 根目錄。
+  # Netlify 的打包器不內聯 node_modules，而是從函式檔的位置往上追蹤 import
+  # 再把套件放進 zip；放在根目錄時解析範圍是 root 的 package.json，
+  # express / pino / cors 都不在那裡，zip 因此少了它們，部署後必定
+  # 在第一個請求就 `Cannot find package 'express'`。
+  directory = "artifacts/api-server/netlify/functions"
+  node_bundler = "esbuild"
+  # 刻意不使用 external_node_modules：這是 pnpm workspace，express / pino 都是
+  # artifacts/api-server 的依賴，不會出現在 root 的 node_modules。列為 external
+  # 之後，函式在執行期就會找不到它們（Cannot find package 'express'）。
+  # 全部打包進去反而是這個結構下唯一可靠的作法。
+  #
+  # pino 之所以能被打包：正式環境不啟用 pino-pretty transport（見 logger.ts），
+  # 因此那條會在執行期解析 worker 檔路徑的程式碼不會被執行到。
+
+# 這裡刻意沒有任何 [[redirects]]。
+#
+# 所有路由規則集中在 artifacts/web/public/_redirects，因為 Netlify 的處理順序是
+# 「_redirects 的全部規則」→「netlify.toml 的全部規則」。兩邊各放一條的話，
+# _redirects 裡的 SPA 收尾 /* 會在 netlify.toml 被讀到之前就接走 /api/*，
+# 結果是每一支 API 都回 index.html —— 而 netlify build 完全不會報錯，
+# 要到線上打 API 拿到 HTML 才會發現。
+
+# SPA 收尾（/* → /index.html）刻意**不**寫在這裡，而是放在
+# artifacts/web/public/_redirects。
+#
+# 原因：netlify.toml 的 redirect 在 `netlify dev` 下會套用在「代理到 Vite 之前」，
+# 而 netlify dev 無從得知 /src/main.tsx 這種虛擬路徑是否存在，於是把它們一併
+# 改寫成 /index.html。Vite 接著收到「請把 index.html 當 JS 模組解析」，
+# 前端因此整個載不起來 —— 畫面全白，而且瀏覽器主控台的錯誤看起來像 HTML 壞掉，
+# 完全不會指向 redirect 設定。
+#
+# 放在 public/_redirects 則只會被複製進建置產物、由正式環境的靜態服務套用，
+# 開發時 Vite 自己處理路由，兩邊各司其職。
+
+[dev]
+  # `netlify dev` 會起這個指令當前端，並把 /api/* 導到本機函式 ——
+  # 本機因此得到與線上同構的環境，不需要另外維護一份 Vite proxy 設定。
+  command = "pnpm --filter @workspace/web run dev"
+  targetPort = 5173
+  port = 8888

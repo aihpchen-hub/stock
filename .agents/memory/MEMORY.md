@@ -1,0 +1,2 @@
+- [FinMind API datasets](finmind-api.md) — correct dataset names and data format for Taiwan stock data
+- [Orval codegen zod fix](orval-zod-fix.md) — orval regenerates api-zod index.ts on every run; fix-zod-index.mjs post-processes it

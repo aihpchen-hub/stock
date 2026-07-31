@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: analyze
+    description: Taiwan stock industry analysis
+  - name: stock
+    description: Per-stock financial data (FinMind)
+  - name: outcomes
+    description: 前瞻驗證 — 以事後真實走勢檢驗當初存下的交易計畫
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /analyze:
+    post:
+      operationId: analyzeIndustry
+      tags: [analyze]
+      summary: 分析台股產業供應鏈
+      description: 搜尋近期產業新聞，AI 拆解台股供應鏈核心標的並計算情境期望值
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: 分析結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResult"
+        "400":
+          description: 請求格式錯誤
+        "500":
+          description: 分析失敗
+  /stock/{code}:
+    get:
+      operationId: stockDetail
+      tags: [stock]
+      summary: 單股財務資料（FinMind）
+      description: 抓取股價MA、月營收YoY、三大法人30日淨買賣
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 台股股票代號（如：3324）
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1m, 3m, 6m]
+            default: 3m
+      responses:
+        "200":
+          description: 財務資料
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockDetailResult"
+        "500":
+          description: 資料抓取失敗
+  /outcomes:
+    post:
+      operationId: verifyOutcomes
+      tags: [outcomes]
+      summary: 前瞻驗證交易計畫
+      description: >-
+        以事後真實日線走勢，判定每筆計畫的停利與停損哪一個先被觸及。
+        用於檢驗未經回測的三情境機率設定是否貼近實際。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOutcomesRequest"
+      responses:
+        "200":
+          description: 驗證結果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyOutcomesResult"
+        "400":
+          description: 請求格式錯誤
+        "500":
+          description: 驗證失敗
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AnalyzeRequest:
+      type: object
+      properties:
+        keyword:
+          type: string
+          description: 產業關鍵字（例：AI水冷散熱）
+        period:
+          type: string
+          enum: [1m, 3m, 6m]
+          description: 分析週期
+      required:
+        - keyword
+        - period
+    AnalyzeResult:
+      type: object
+      properties:
+        keyword:
+          type: string
+        period:
+          type: string
+        sentiment:
+          type: string
+          enum: [bullish, neutral, bearish]
+          description: 產業綜合情緒
+        summary:
+          type: string
+          description: 產業現況總結
+        catalysts:
+          type: array
+          items:
+            type: string
+          description: >-
+            主要催化劑列表（純文字）。保留供舊版快照相容，新版請用 catalystDetails，
+            它額外帶出處。兩者由同一份模型輸出產生，順序一致。
+        catalystDetails:
+          type: array
+          items:
+            $ref: "#/components/schemas/SourcedClaim"
+          description: >-
+            帶出處的催化劑。source 指向 newsItems 的 1 起算索引；
+            null 表示模型沒有對應到任何一篇新聞，即該說法屬於模型推論而非報導內容。
+        stocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/StockInfo"
+          description: 核心供應鏈標的
+        newsItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsItem"
+          description: 近期相關新聞
+      required:
+        - keyword
+        - period
+        - sentiment
+        - summary
+        - catalysts
+        - stocks
+        - newsItems
+    SourcedClaim:
+      type: object
+      properties:
+        text:
+          type: string
+        source:
+          type: integer
+          nullable: true
+          description: >-
+            對應的 newsItems 索引（1 起算）。null 代表沒有任何一篇新聞支持此說法 ——
+            那是模型依既有知識所做的推論，畫面上必須與有報導根據的內容區分顯示。
+      required:
+        - text
+    StockInfo:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 股票代號
+        name:
+          type: string
+          description: 公司名稱
+        reason:
+          type: string
+          description: 選入理由
+        reasonSource:
+          type: integer
+          nullable: true
+          description: 選入理由的出處（newsItems 的 1 起算索引）；null 表示模型推論
+        sector:
+          type: string
+          description: 所屬次產業
+      required:
+        - code
+        - name
+        - reason
+        - sector
+    NewsItem:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+      required:
+        - title
+        - url
+    RevenuePoint:
+      type: object
+      properties:
+        yearMonth:
+          type: string
+          description: "格式：YYYY/MM"
+        revenue:
+          type: number
+          description: 月營收（新台幣元）
+        yoy:
+          type: number
+          nullable: true
+          description: 年增率（%）
+      required:
+        - yearMonth
+        - revenue
+    VerifyOutcomeItem:
+      type: object
+      properties:
+        code:
+          type: string
+        from:
+          type: string
+          description: 做出這份計畫的日期（YYYY-MM-DD）
+        entryLow:
+          type: number
+        entryHigh:
+          type: number
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+      required: [code, from, entryLow, entryHigh, stopLoss, takeProfit]
+    VerifyOutcomesRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VerifyOutcomeItem"
+          description: 一次最多 40 筆，超過的會被忽略
+      required: [items]
+    OutcomeKind:
+      type: string
+      enum: [target, stop, ambiguous, open, no_entry, unknown]
+      description: >-
+        target=先觸及停利、stop=先觸及停損、
+        ambiguous=同一根日線同時觸及兩者（無法判定盤中先後）、
+        open=已進場但兩者皆未觸及、no_entry=價格從未進入進場區間、unknown=資料不足
+    OutcomeResultItem:
+      type: object
+      properties:
+        code:
+          type: string
+        from:
+          type: string
+        kind:
+          $ref: "#/components/schemas/OutcomeKind"
+        entryDate:
+          type: string
+          nullable: true
+        exitDate:
+          type: string
+          nullable: true
+        barsHeld:
+          type: number
+          description: 進場後經過的交易日數
+        maxFavorablePct:
+          type: number
+          nullable: true
+          description: 進場後最大有利波動（%）
+        maxAdversePct:
+          type: number
+          nullable: true
+          description: 進場後最大不利波動（%）
+      required: [code, from, kind, barsHeld]
+    OutcomeTally:
+      type: object
+      properties:
+        target:
+          type: number
+        stop:
+          type: number
+        ambiguous:
+          type: number
+        open:
+          type: number
+        noEntry:
+          type: number
+        unknown:
+          type: number
+        decided:
+          type: number
+          description: 已分出勝負的筆數（達標＋停損），命中率的分母
+        targetRate:
+          type: number
+          nullable: true
+          description: 達標率（%）。尚無已結案筆數時為 null，不以 0% 假裝有結論。
+      required: [target, stop, ambiguous, open, noEntry, unknown, decided]
+    VerifyOutcomesResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/OutcomeResultItem"
+        tally:
+          $ref: "#/components/schemas/OutcomeTally"
+      required: [results, tally]
+    StockDetailResult:
+      type: object
+      properties:
+        code:
+          type: string
+        period:
+          type: string
+          enum: [1m, 3m, 6m]
+          description: 本次計算採用的分析週期（未帶參數時為 3m）
+        horizonFactor:
+          type: number
+          description: >-
+            時間尺度係數 √(交易日數÷60)。停損、停利、移動停損與三情境幅度
+            皆乘上此係數，因此風報比與情境機率不隨週期改變，只有絕對幅度伸縮。
+        currentPrice:
+          type: number
+          nullable: true
+        ma20:
+          type: number
+          nullable: true
+        ma60:
+          type: number
+          nullable: true
+        maSignal:
+          type: string
+          enum: [above_both, above_ma20, below_both, insufficient_data]
+        revenueYoY:
+          type: number
+          nullable: true
+          description: 最近月份年增率（%）
+        revenueHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenuePoint"
+        institutionalNet30d:
+          type: number
+          description: 三大法人30日合計淨買超（股數）
+        foreignNet30d:
+          type: number
+          description: 外資30日淨買超（股數）
+        trustNet30d:
+          type: number
+          description: 投信30日淨買超（股數）
+        dealerNet30d:
+          type: number
+          description: 自營商30日淨買超（股數）
+        evScore:
+          type: number
+          description: 綜合評分（-7 到 7）
+        pBull:
+          type: number
+          description: 多頭情境機率（0–1）
+        pBase:
+          type: number
+          description: 基準情境機率（0–1）
+        pBear:
+          type: number
+          description: 空頭情境機率（0–1）
+        rBull:
+          type: number
+          description: 多頭情境預期報酬（%）
+        rBase:
+          type: number
+          description: 基準情境預期報酬（%）
+        rBear:
+          type: number
+          description: 空頭情境預期報酬（%）
+        ev:
+          type: number
+          description: 加權期望值 E(V)（%）
+        evSignal:
+          type: string
+          enum: [strong_buy, buy, watch_positive, watch_negative, avoid]
+          description: 期望值訊號
+        priceAsOf:
+          type: string
+          nullable: true
+          description: 價格資料的最後交易日（YYYY-MM-DD）
+        atr:
+          type: number
+          nullable: true
+          description: 近14日平均真實振幅（元）
+        atrPct:
+          type: number
+          nullable: true
+          description: ATR 佔股價百分比，即日均波動率（%）
+        entryLow:
+          type: number
+          nullable: true
+          description: 建議進場區間下緣（元）
+        entryHigh:
+          type: number
+          nullable: true
+          description: 建議進場區間上緣（元）
+        stopLoss:
+          type: number
+          nullable: true
+          description: >-
+            停損價，進場中值減 2×ATR×時間尺度係數（元），已取整到合法檔位 ——
+            未取整時會出現無法下單的價格（如 1000 元以上個股的 2040.43，該區間檔位為 5 元）。
+        takeProfit:
+          type: number
+          nullable: true
+          description: 停利價，進場中值加 多頭倍數×ATR×時間尺度係數（元），已取整到合法檔位
+        firstTarget:
+          type: number
+          nullable: true
+          description: >-
+            第一目標（1R），與停損等距、已取整到合法檔位。
+            達成時建議先出一半。停利落在 1R 以內時為 null（分批出場無意義）。
+        riskRewardRatio:
+          type: number
+          nullable: true
+          description: 風險報酬比，(停利−進場)÷(進場−停損)
+        riskPerLot:
+          type: number
+          nullable: true
+          description: 每張最大損失（元，1張=1000股）
+        rewardPerLot:
+          type: number
+          nullable: true
+          description: 每張目標獲利（元，1張=1000股）
+        entryTiming:
+          type: string
+          enum: [now, wait_pullback, avoid, insufficient_data]
+          description: 現價進場時機判斷
+        trailingStop:
+          type: number
+          nullable: true
+          description: >-
+            移動停損（吊燈出場法）起始值，部位高點減 2.5×ATR×時間尺度係數，只升不降。
+            規劃階段的部位高點即進場價，故此值必定低於初始停損，在部位獲利前不會先觸發。
+        swingLow:
+          type: number
+          nullable: true
+          description: 近20日最低價，作為停損位置的結構性對照
+        swingHigh:
+          type: number
+          nullable: true
+          description: 近20日最高價，作為壓力位置參考
+        avgVolume20:
+          type: number
+          nullable: true
+          description: 近20日平均成交量（股）
+        foreignNetDays:
+          type: number
+          nullable: true
+          description: 外資30日淨買超相當於幾日平均成交量
+        trustNetDays:
+          type: number
+          nullable: true
+          description: 投信30日淨買超相當於幾日平均成交量
+        stockName:
+          type: string
+          nullable: true
+          description: 官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱
+        officialIndustry:
+          type: string
+          nullable: true
+          description: 官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照
+      required:
+        - code

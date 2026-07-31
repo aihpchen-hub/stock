@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    // 測試檔要 import './api.mts' —— Netlify 以副檔名判斷函式，不能省略。
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["functions/**/*", "*.test.ts"]
+}

@@ -1,0 +1,972 @@
+{
+  "3017": [
+    {
+      "date": "2026-04-21",
+      "close": 2565,
+      "max": 2585,
+      "min": 2450,
+      "Trading_Volume": 4107167
+    },
+    {
+      "date": "2026-04-22",
+      "close": 2695,
+      "max": 2800,
+      "min": 2580,
+      "Trading_Volume": 5151543
+    },
+    {
+      "date": "2026-04-23",
+      "close": 2680,
+      "max": 2875,
+      "min": 2585,
+      "Trading_Volume": 6812966
+    },
+    {
+      "date": "2026-04-24",
+      "close": 2945,
+      "max": 2945,
+      "min": 2760,
+      "Trading_Volume": 5243084
+    },
+    {
+      "date": "2026-04-27",
+      "close": 2835,
+      "max": 3010,
+      "min": 2820,
+      "Trading_Volume": 6583986
+    },
+    {
+      "date": "2026-04-28",
+      "close": 2780,
+      "max": 2990,
+      "min": 2755,
+      "Trading_Volume": 5933190
+    },
+    {
+      "date": "2026-04-29",
+      "close": 2835,
+      "max": 2895,
+      "min": 2735,
+      "Trading_Volume": 4122743
+    },
+    {
+      "date": "2026-04-30",
+      "close": 2835,
+      "max": 2870,
+      "min": 2805,
+      "Trading_Volume": 3420271
+    },
+    {
+      "date": "2026-05-04",
+      "close": 2885,
+      "max": 2975,
+      "min": 2815,
+      "Trading_Volume": 3728835
+    },
+    {
+      "date": "2026-05-05",
+      "close": 2705,
+      "max": 2845,
+      "min": 2655,
+      "Trading_Volume": 8453094
+    },
+    {
+      "date": "2026-05-06",
+      "close": 2435,
+      "max": 2685,
+      "min": 2435,
+      "Trading_Volume": 11438234
+    },
+    {
+      "date": "2026-05-07",
+      "close": 2415,
+      "max": 2500,
+      "min": 2380,
+      "Trading_Volume": 11314013
+    },
+    {
+      "date": "2026-05-08",
+      "close": 2445,
+      "max": 2500,
+      "min": 2350,
+      "Trading_Volume": 5937295
+    },
+    {
+      "date": "2026-05-11",
+      "close": 2555,
+      "max": 2590,
+      "min": 2455,
+      "Trading_Volume": 6204661
+    },
+    {
+      "date": "2026-05-12",
+      "close": 2520,
+      "max": 2625,
+      "min": 2520,
+      "Trading_Volume": 5010847
+    },
+    {
+      "date": "2026-05-13",
+      "close": 2585,
+      "max": 2625,
+      "min": 2500,
+      "Trading_Volume": 6267261
+    },
+    {
+      "date": "2026-05-14",
+      "close": 2555,
+      "max": 2775,
+      "min": 2555,
+      "Trading_Volume": 7168071
+    },
+    {
+      "date": "2026-05-15",
+      "close": 2455,
+      "max": 2735,
+      "min": 2445,
+      "Trading_Volume": 6646560
+    },
+    {
+      "date": "2026-05-18",
+      "close": 2410,
+      "max": 2435,
+      "min": 2300,
+      "Trading_Volume": 4751185
+    },
+    {
+      "date": "2026-05-19",
+      "close": 2390,
+      "max": 2470,
+      "min": 2370,
+      "Trading_Volume": 3542685
+    },
+    {
+      "date": "2026-05-20",
+      "close": 2340,
+      "max": 2435,
+      "min": 2325,
+      "Trading_Volume": 3568975
+    },
+    {
+      "date": "2026-05-21",
+      "close": 2495,
+      "max": 2515,
+      "min": 2415,
+      "Trading_Volume": 3762794
+    },
+    {
+      "date": "2026-05-22",
+      "close": 2545,
+      "max": 2610,
+      "min": 2470,
+      "Trading_Volume": 5501063
+    },
+    {
+      "date": "2026-05-25",
+      "close": 2575,
+      "max": 2640,
+      "min": 2545,
+      "Trading_Volume": 5688149
+    },
+    {
+      "date": "2026-05-26",
+      "close": 2725,
+      "max": 2750,
+      "min": 2570,
+      "Trading_Volume": 6239924
+    },
+    {
+      "date": "2026-05-27",
+      "close": 2700,
+      "max": 2835,
+      "min": 2695,
+      "Trading_Volume": 4384212
+    },
+    {
+      "date": "2026-05-28",
+      "close": 2580,
+      "max": 2795,
+      "min": 2540,
+      "Trading_Volume": 5097423
+    },
+    {
+      "date": "2026-05-29",
+      "close": 2665,
+      "max": 2730,
+      "min": 2615,
+      "Trading_Volume": 9351169
+    },
+    {
+      "date": "2026-06-01",
+      "close": 2785,
+      "max": 2835,
+      "min": 2705,
+      "Trading_Volume": 5090031
+    },
+    {
+      "date": "2026-06-02",
+      "close": 2700,
+      "max": 2835,
+      "min": 2650,
+      "Trading_Volume": 4220815
+    },
+    {
+      "date": "2026-06-03",
+      "close": 2855,
+      "max": 2965,
+      "min": 2700,
+      "Trading_Volume": 6908395
+    },
+    {
+      "date": "2026-06-04",
+      "close": 2710,
+      "max": 2820,
+      "min": 2675,
+      "Trading_Volume": 4446507
+    },
+    {
+      "date": "2026-06-05",
+      "close": 2600,
+      "max": 2680,
+      "min": 2505,
+      "Trading_Volume": 4900550
+    },
+    {
+      "date": "2026-06-08",
+      "close": 2570,
+      "max": 2570,
+      "min": 2340,
+      "Trading_Volume": 4356915
+    },
+    {
+      "date": "2026-06-09",
+      "close": 2545,
+      "max": 2575,
+      "min": 2440,
+      "Trading_Volume": 6361937
+    },
+    {
+      "date": "2026-06-10",
+      "close": 2360,
+      "max": 2505,
+      "min": 2350,
+      "Trading_Volume": 5878553
+    },
+    {
+      "date": "2026-06-11",
+      "close": 2335,
+      "max": 2445,
+      "min": 2260,
+      "Trading_Volume": 4531372
+    },
+    {
+      "date": "2026-06-12",
+      "close": 2405,
+      "max": 2480,
+      "min": 2380,
+      "Trading_Volume": 2490291
+    },
+    {
+      "date": "2026-06-15",
+      "close": 2410,
+      "max": 2475,
+      "min": 2410,
+      "Trading_Volume": 2107865
+    },
+    {
+      "date": "2026-06-16",
+      "close": 2370,
+      "max": 2470,
+      "min": 2370,
+      "Trading_Volume": 3025487
+    },
+    {
+      "date": "2026-06-17",
+      "close": 2365,
+      "max": 2440,
+      "min": 2330,
+      "Trading_Volume": 3829529
+    },
+    {
+      "date": "2026-06-18",
+      "close": 2400,
+      "max": 2425,
+      "min": 2365,
+      "Trading_Volume": 3318114
+    },
+    {
+      "date": "2026-06-22",
+      "close": 2420,
+      "max": 2490,
+      "min": 2380,
+      "Trading_Volume": 3254412
+    },
+    {
+      "date": "2026-06-23",
+      "close": 2425,
+      "max": 2475,
+      "min": 2400,
+      "Trading_Volume": 3079821
+    },
+    {
+      "date": "2026-06-24",
+      "close": 2530,
+      "max": 2590,
+      "min": 2335,
+      "Trading_Volume": 6494281
+    },
+    {
+      "date": "2026-06-25",
+      "close": 2505,
+      "max": 2635,
+      "min": 2485,
+      "Trading_Volume": 3833150
+    },
+    {
+      "date": "2026-06-26",
+      "close": 2255,
+      "max": 2475,
+      "min": 2255,
+      "Trading_Volume": 6567236
+    },
+    {
+      "date": "2026-06-29",
+      "close": 2300,
+      "max": 2315,
+      "min": 2220,
+      "Trading_Volume": 3084014
+    },
+    {
+      "date": "2026-06-30",
+      "close": 2525,
+      "max": 2530,
+      "min": 2370,
+      "Trading_Volume": 4835330
+    },
+    {
+      "date": "2026-07-01",
+      "close": 2620,
+      "max": 2665,
+      "min": 2500,
+      "Trading_Volume": 5567033
+    },
+    {
+      "date": "2026-07-02",
+      "close": 2740,
+      "max": 2745,
+      "min": 2525,
+      "Trading_Volume": 5061323
+    },
+    {
+      "date": "2026-07-03",
+      "close": 2760,
+      "max": 2780,
+      "min": 2665,
+      "Trading_Volume": 4659120
+    },
+    {
+      "date": "2026-07-06",
+      "close": 2670,
+      "max": 2790,
+      "min": 2615,
+      "Trading_Volume": 3733969
+    },
+    {
+      "date": "2026-07-07",
+      "close": 2450,
+      "max": 2670,
+      "min": 2410,
+      "Trading_Volume": 4349877
+    },
+    {
+      "date": "2026-07-08",
+      "close": 2325,
+      "max": 2440,
+      "min": 2290,
+      "Trading_Volume": 4441500
+    },
+    {
+      "date": "2026-07-09",
+      "close": 2350,
+      "max": 2435,
+      "min": 2335,
+      "Trading_Volume": 2889551
+    },
+    {
+      "date": "2026-07-13",
+      "close": 2225,
+      "max": 2420,
+      "min": 2210,
+      "Trading_Volume": 2704759
+    },
+    {
+      "date": "2026-07-14",
+      "close": 2120,
+      "max": 2220,
+      "min": 2015,
+      "Trading_Volume": 4396274
+    },
+    {
+      "date": "2026-07-15",
+      "close": 2165,
+      "max": 2200,
+      "min": 2120,
+      "Trading_Volume": 2129895
+    },
+    {
+      "date": "2026-07-16",
+      "close": 2225,
+      "max": 2290,
+      "min": 2155,
+      "Trading_Volume": 4220745
+    },
+    {
+      "date": "2026-07-17",
+      "close": 2200,
+      "max": 2335,
+      "min": 2145,
+      "Trading_Volume": 5543230
+    },
+    {
+      "date": "2026-07-20",
+      "close": 2135,
+      "max": 2240,
+      "min": 2015,
+      "Trading_Volume": 4416999
+    },
+    {
+      "date": "2026-07-21",
+      "close": 2320,
+      "max": 2340,
+      "min": 2175,
+      "Trading_Volume": 3736446
+    },
+    {
+      "date": "2026-07-22",
+      "close": 2265,
+      "max": 2390,
+      "min": 2255,
+      "Trading_Volume": 4356001
+    },
+    {
+      "date": "2026-07-23",
+      "close": 2440,
+      "max": 2490,
+      "min": 2350,
+      "Trading_Volume": 7157581
+    },
+    {
+      "date": "2026-07-24",
+      "close": 2380,
+      "max": 2510,
+      "min": 2355,
+      "Trading_Volume": 4515686
+    },
+    {
+      "date": "2026-07-27",
+      "close": 2400,
+      "max": 2420,
+      "min": 2310,
+      "Trading_Volume": 2367643
+    },
+    {
+      "date": "2026-07-28",
+      "close": 2240,
+      "max": 2325,
+      "min": 2225,
+      "Trading_Volume": 3173558
+    },
+    {
+      "date": "2026-07-29",
+      "close": 2095,
+      "max": 2245,
+      "min": 2020,
+      "Trading_Volume": 6379050
+    }
+  ],
+  "8111": [
+    {
+      "date": "2026-04-21",
+      "close": 80.9,
+      "max": 82,
+      "min": 76.2,
+      "Trading_Volume": 10431197
+    },
+    {
+      "date": "2026-04-22",
+      "close": 77,
+      "max": 80.6,
+      "min": 76.8,
+      "Trading_Volume": 8517801
+    },
+    {
+      "date": "2026-04-23",
+      "close": 71,
+      "max": 78.5,
+      "min": 69.3,
+      "Trading_Volume": 10679708
+    },
+    {
+      "date": "2026-04-24",
+      "close": 68.1,
+      "max": 72.7,
+      "min": 66.6,
+      "Trading_Volume": 5175665
+    },
+    {
+      "date": "2026-04-27",
+      "close": 66.9,
+      "max": 68.6,
+      "min": 64.2,
+      "Trading_Volume": 4150559
+    },
+    {
+      "date": "2026-04-28",
+      "close": 71,
+      "max": 71,
+      "min": 67.4,
+      "Trading_Volume": 4488801
+    },
+    {
+      "date": "2026-04-29",
+      "close": 70.3,
+      "max": 72.9,
+      "min": 69.6,
+      "Trading_Volume": 3772446
+    },
+    {
+      "date": "2026-04-30",
+      "close": 69.4,
+      "max": 72.4,
+      "min": 69.4,
+      "Trading_Volume": 3925569
+    },
+    {
+      "date": "2026-05-04",
+      "close": 69.1,
+      "max": 70.6,
+      "min": 68.5,
+      "Trading_Volume": 2726924
+    },
+    {
+      "date": "2026-05-05",
+      "close": 70.8,
+      "max": 71.4,
+      "min": 68.9,
+      "Trading_Volume": 2859815
+    },
+    {
+      "date": "2026-05-06",
+      "close": 68.6,
+      "max": 71.7,
+      "min": 66.2,
+      "Trading_Volume": 3919901
+    },
+    {
+      "date": "2026-05-07",
+      "close": 69.2,
+      "max": 69.7,
+      "min": 67.4,
+      "Trading_Volume": 2277286
+    },
+    {
+      "date": "2026-05-08",
+      "close": 66.8,
+      "max": 70.1,
+      "min": 66.2,
+      "Trading_Volume": 2685509
+    },
+    {
+      "date": "2026-05-11",
+      "close": 66.2,
+      "max": 67.4,
+      "min": 64.6,
+      "Trading_Volume": 3029550
+    },
+    {
+      "date": "2026-05-12",
+      "close": 66.8,
+      "max": 68.5,
+      "min": 66.1,
+      "Trading_Volume": 2478113
+    },
+    {
+      "date": "2026-05-13",
+      "close": 64,
+      "max": 66.3,
+      "min": 64,
+      "Trading_Volume": 2558251
+    },
+    {
+      "date": "2026-05-14",
+      "close": 64.6,
+      "max": 66.6,
+      "min": 63.9,
+      "Trading_Volume": 2245891
+    },
+    {
+      "date": "2026-05-15",
+      "close": 62.4,
+      "max": 65.7,
+      "min": 62.4,
+      "Trading_Volume": 2184562
+    },
+    {
+      "date": "2026-05-18",
+      "close": 62.7,
+      "max": 63.1,
+      "min": 60,
+      "Trading_Volume": 1627046
+    },
+    {
+      "date": "2026-05-19",
+      "close": 61.5,
+      "max": 63,
+      "min": 61,
+      "Trading_Volume": 1166225
+    },
+    {
+      "date": "2026-05-20",
+      "close": 61,
+      "max": 62.4,
+      "min": 61,
+      "Trading_Volume": 1053625
+    },
+    {
+      "date": "2026-05-21",
+      "close": 62.5,
+      "max": 63.1,
+      "min": 61.9,
+      "Trading_Volume": 865127
+    },
+    {
+      "date": "2026-05-22",
+      "close": 66.8,
+      "max": 68.1,
+      "min": 63.1,
+      "Trading_Volume": 3374451
+    },
+    {
+      "date": "2026-05-25",
+      "close": 68,
+      "max": 69.8,
+      "min": 67.5,
+      "Trading_Volume": 3417398
+    },
+    {
+      "date": "2026-05-26",
+      "close": 68.8,
+      "max": 69.3,
+      "min": 66.3,
+      "Trading_Volume": 2032998
+    },
+    {
+      "date": "2026-05-27",
+      "close": 67.6,
+      "max": 69.6,
+      "min": 66.8,
+      "Trading_Volume": 2436358
+    },
+    {
+      "date": "2026-05-28",
+      "close": 64.4,
+      "max": 68.6,
+      "min": 64.4,
+      "Trading_Volume": 2468717
+    },
+    {
+      "date": "2026-05-29",
+      "close": 65.7,
+      "max": 67.1,
+      "min": 64.4,
+      "Trading_Volume": 1558406
+    },
+    {
+      "date": "2026-06-01",
+      "close": 66,
+      "max": 67.9,
+      "min": 66,
+      "Trading_Volume": 1823774
+    },
+    {
+      "date": "2026-06-02",
+      "close": 63.6,
+      "max": 68,
+      "min": 63,
+      "Trading_Volume": 2927799
+    },
+    {
+      "date": "2026-06-03",
+      "close": 65.2,
+      "max": 68.2,
+      "min": 65,
+      "Trading_Volume": 3254474
+    },
+    {
+      "date": "2026-06-04",
+      "close": 62.9,
+      "max": 65.2,
+      "min": 62.8,
+      "Trading_Volume": 1804429
+    },
+    {
+      "date": "2026-06-05",
+      "close": 61.8,
+      "max": 62.8,
+      "min": 61.2,
+      "Trading_Volume": 1075143
+    },
+    {
+      "date": "2026-06-08",
+      "close": 58.9,
+      "max": 59.3,
+      "min": 55.7,
+      "Trading_Volume": 1706258
+    },
+    {
+      "date": "2026-06-09",
+      "close": 59.6,
+      "max": 60.7,
+      "min": 58.8,
+      "Trading_Volume": 815682
+    },
+    {
+      "date": "2026-06-10",
+      "close": 56.4,
+      "max": 60,
+      "min": 56.3,
+      "Trading_Volume": 1586551
+    },
+    {
+      "date": "2026-06-11",
+      "close": 55.5,
+      "max": 56.3,
+      "min": 54.5,
+      "Trading_Volume": 1007249
+    },
+    {
+      "date": "2026-06-12",
+      "close": 55.6,
+      "max": 57.6,
+      "min": 55.6,
+      "Trading_Volume": 847953
+    },
+    {
+      "date": "2026-06-15",
+      "close": 56.1,
+      "max": 57.1,
+      "min": 55.9,
+      "Trading_Volume": 691478
+    },
+    {
+      "date": "2026-06-16",
+      "close": 55.3,
+      "max": 57.2,
+      "min": 55.3,
+      "Trading_Volume": 1102336
+    },
+    {
+      "date": "2026-06-17",
+      "close": 54.5,
+      "max": 55.3,
+      "min": 53.5,
+      "Trading_Volume": 1149713
+    },
+    {
+      "date": "2026-06-18",
+      "close": 56.2,
+      "max": 56.9,
+      "min": 54.7,
+      "Trading_Volume": 1445813
+    },
+    {
+      "date": "2026-06-22",
+      "close": 56.9,
+      "max": 56.9,
+      "min": 55.7,
+      "Trading_Volume": 1236252
+    },
+    {
+      "date": "2026-06-23",
+      "close": 55.3,
+      "max": 57.9,
+      "min": 55,
+      "Trading_Volume": 1256304
+    },
+    {
+      "date": "2026-06-24",
+      "close": 54.3,
+      "max": 55.2,
+      "min": 53.8,
+      "Trading_Volume": 827971
+    },
+    {
+      "date": "2026-06-25",
+      "close": 54.9,
+      "max": 57.5,
+      "min": 54.4,
+      "Trading_Volume": 1248393
+    },
+    {
+      "date": "2026-06-26",
+      "close": 51.8,
+      "max": 54.9,
+      "min": 51,
+      "Trading_Volume": 1489025
+    },
+    {
+      "date": "2026-06-29",
+      "close": 50.5,
+      "max": 52.3,
+      "min": 50.3,
+      "Trading_Volume": 1024906
+    },
+    {
+      "date": "2026-06-30",
+      "close": 52.2,
+      "max": 52.3,
+      "min": 51.1,
+      "Trading_Volume": 722818
+    },
+    {
+      "date": "2026-07-01",
+      "close": 52.3,
+      "max": 54.9,
+      "min": 51.5,
+      "Trading_Volume": 965416
+    },
+    {
+      "date": "2026-07-02",
+      "close": 52,
+      "max": 52.7,
+      "min": 51.1,
+      "Trading_Volume": 484645
+    },
+    {
+      "date": "2026-07-03",
+      "close": 53.3,
+      "max": 53.5,
+      "min": 51.6,
+      "Trading_Volume": 517337
+    },
+    {
+      "date": "2026-07-06",
+      "close": 52.9,
+      "max": 54.7,
+      "min": 52.5,
+      "Trading_Volume": 688232
+    },
+    {
+      "date": "2026-07-07",
+      "close": 51.2,
+      "max": 54.1,
+      "min": 50.7,
+      "Trading_Volume": 737711
+    },
+    {
+      "date": "2026-07-08",
+      "close": 50.9,
+      "max": 52.4,
+      "min": 50.1,
+      "Trading_Volume": 646247
+    },
+    {
+      "date": "2026-07-09",
+      "close": 50.3,
+      "max": 51.7,
+      "min": 50,
+      "Trading_Volume": 510642
+    },
+    {
+      "date": "2026-07-13",
+      "close": 49.15,
+      "max": 50.9,
+      "min": 48.9,
+      "Trading_Volume": 1143783
+    },
+    {
+      "date": "2026-07-14",
+      "close": 47.05,
+      "max": 49.8,
+      "min": 45.45,
+      "Trading_Volume": 1364138
+    },
+    {
+      "date": "2026-07-15",
+      "close": 50.5,
+      "max": 51.1,
+      "min": 47.45,
+      "Trading_Volume": 1319967
+    },
+    {
+      "date": "2026-07-16",
+      "close": 49.5,
+      "max": 50.3,
+      "min": 47.95,
+      "Trading_Volume": 923507
+    },
+    {
+      "date": "2026-07-17",
+      "close": 48.95,
+      "max": 49.35,
+      "min": 46.95,
+      "Trading_Volume": 1140688
+    },
+    {
+      "date": "2026-07-20",
+      "close": 44.25,
+      "max": 50.5,
+      "min": 44.1,
+      "Trading_Volume": 3280057
+    },
+    {
+      "date": "2026-07-21",
+      "close": 47,
+      "max": 47.7,
+      "min": 44.85,
+      "Trading_Volume": 1022058
+    },
+    {
+      "date": "2026-07-22",
+      "close": 51.7,
+      "max": 51.7,
+      "min": 48.95,
+      "Trading_Volume": 1967390
+    },
+    {
+      "date": "2026-07-23",
+      "close": 56.8,
+      "max": 56.8,
+      "min": 53,
+      "Trading_Volume": 8359460
+    },
+    {
+      "date": "2026-07-24",
+      "close": 60.6,
+      "max": 62,
+      "min": 56.1,
+      "Trading_Volume": 20719197
+    },
+    {
+      "date": "2026-07-27",
+      "close": 63.3,
+      "max": 66.6,
+      "min": 57.9,
+      "Trading_Volume": 16907133
+    },
+    {
+      "date": "2026-07-28",
+      "close": 61.8,
+      "max": 69,
+      "min": 60.8,
+      "Trading_Volume": 48358835
+    },
+    {
+      "date": "2026-07-29",
+      "close": 62.6,
+      "max": 63.4,
+      "min": 58.3,
+      "Trading_Volume": 27496974
+    }
+  ]
+}
