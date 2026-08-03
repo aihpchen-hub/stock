@@ -17,6 +17,9 @@ export default defineConfig({
       // 都會被 Netlify 當成一支函式部署，而 `api.test` 含點號是不合法的函式名。
       'artifacts/api-server/netlify/*.test.ts',
       'artifacts/web/src/**/*.test.ts',
+      // lib/ 底下的共用套件。`@workspace/advice` 同時被後端與前端引用，
+      // 沒有這一條，它的測試會在移進 lib/ 之後靜靜地不再執行。
+      'lib/*/src/**/*.test.ts',
     ],
   },
   resolve: {

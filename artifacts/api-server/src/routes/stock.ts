@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { deriveAdvice } from "@workspace/advice";
 
 import {
   calcATR,
@@ -9,7 +10,6 @@ import {
   type PriceRow,
 } from "../lib/indicators";
 import { PERIOD_TRADING_DAYS, calcEV, horizonFactor } from "../lib/tradePlan";
-import { deriveAdvice } from "../lib/advice";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
 import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind } from "../lib/finmind";

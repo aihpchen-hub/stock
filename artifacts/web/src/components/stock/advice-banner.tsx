@@ -26,7 +26,8 @@ export function AdviceBanner({
   stopLoss,
   priceAsOf,
 }: AdviceBannerProps) {
-  // 舊快照沒有這個欄位 —— 整塊不渲染，不顯示半截狀態
+  // 舊快照沒有這個欄位，但呼叫端（stock-card）已改為以 deriveAdvice 補算，
+  // 正常情況下必定有值。這裡保留防禦性判斷 —— 缺值時整塊不渲染，不顯示半截狀態。
   if (!advice) return null;
 
   const price = currentPrice != null ? currentPrice.toString() : '—';

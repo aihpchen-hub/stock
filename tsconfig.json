@@ -4,6 +4,9 @@
   "files": [],
   "references": [
     {
+      "path": "./lib/advice"
+    },
+    {
       "path": "./lib/api-client-react"
     },
     {

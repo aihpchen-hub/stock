@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
+import { deriveAdvice } from '@workspace/advice';
 import { RiskSettings, planPosition } from '@/lib/settings';
 import { lotEconomics, roundTripCostPct } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
@@ -55,6 +56,19 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     revenueAsOf,
     period,
   } = detail;
+
+  // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
+  // 用當時存下來的價位重算，得到的就是當時該顯示的狀態 ——
+  // 少了這一步，部署前存的查詢紀錄仍會把「站回月線後才成立」的價位
+  // 當成現在的建議買價印出來，那正是這次要修掉的東西。
+  const effectiveAdvice =
+    advice ??
+    deriveAdvice({
+      currentPrice: currentPrice ?? null,
+      entryLow: entryLow ?? null,
+      entryHigh: entryHigh ?? null,
+      stopLoss: stopLoss ?? null,
+    });
 
   // Plan position
   const position = planPosition({
@@ -121,7 +135,13 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
               </span>
             )}
           </div>
-          {evSignal && (
+          {/* planKind 為 none 時整個訊號徽章不顯示。
+              評分算的是「這份交易計畫的期望值」，而 none 代表現價已跌破停損
+              或缺少必要價位 —— 那份計畫的前提根本不存在，分數自然無從解讀。
+              一檔剛跳空跌破雙均線的高成長股仍可能算出「強烈買進」，
+              與同一張卡片上的「已跌破停損，不建議進場」直接互相矛盾。
+              評分規則本身屬第二階段，這裡只在前提不成立時不陳述結論。 */}
+          {evSignal && effectiveAdvice.planKind !== 'none' && (
             <div className={`px-3 py-1 rounded-full text-sm font-bold border ${signalColors[evSignal]}`}>
               {signalLabels[evSignal]}
             </div>
@@ -165,7 +185,7 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
       {/* Trading Plan */}
       <div className="p-5 bg-background/50 flex-1 space-y-4">
         <AdviceBanner
-          advice={advice}
+          advice={effectiveAdvice}
           currentPrice={currentPrice}
           entryLow={entryLow}
           entryHigh={entryHigh}
@@ -177,12 +197,12 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
           <Target className="w-4 h-4" />
           {/* 區間在現價之上時那組價位講的是「假如站回月線之後」，
               沿用「交易計畫」這個標題就是使用者看到矛盾數字的原因 */}
-          {advice?.planKind === 'conditional' ? '站回月線後的計畫（尚未成立）' : '交易計畫'}
+          {effectiveAdvice.planKind === 'conditional' ? '站回月線後的計畫（尚未成立）' : '交易計畫'}
         </h4>
 
         {/* planKind 為 none 代表現價已跌破停損或資料不足 —— 那組價位的前提
             已經不存在，印出來只會誤導，整塊不顯示 */}
-        {advice?.planKind === 'none' ? (
+        {effectiveAdvice.planKind === 'none' ? (
           <div className="text-center py-6 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
             目前不提供進場區間與停損停利
           </div>
@@ -192,7 +212,7 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <div className="text-xs text-muted-foreground mb-1">
-                  {advice?.planKind === 'conditional' ? '成立後進場區' : '進場區間'}
+                  {effectiveAdvice.planKind === 'conditional' ? '成立後進場區' : '進場區間'}
                 </div>
                 <div className="font-mono font-medium text-foreground">{entryLow} - {entryHigh}</div>
               </div>

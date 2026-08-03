@@ -13,6 +13,7 @@
     "@google/generative-ai": "^0.24.1",
     "@netlify/aws-lambda-compat": "^1.0.2",
     "@netlify/blobs": "^10.7.11",
+    "@workspace/advice": "workspace:*",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "pino": "^9.14.0",

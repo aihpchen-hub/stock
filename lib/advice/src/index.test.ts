@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveAdvice, type AdviceInput } from "./advice";
+import { deriveAdvice, type AdviceInput } from "./index";
 
 /** 站上均線、現價落在區間內的中性起點，各測試只覆寫需要的欄位 */
 function input(over: Partial<AdviceInput> = {}): AdviceInput {

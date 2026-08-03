@@ -9,6 +9,13 @@
  *
  * 只回傳列舉值，不回傳畫面文字 —— 與 `evSignal` 的做法一致，
  * 文案留在前端（見 `artifacts/web/src/components/stock/advice-banner.tsx`）。
+ *
+ * 為什麼放在 lib/ 而不是後端裡：前端也要用同一份判斷。
+ * localStorage 裡在本次部署之前存下的查詢紀錄沒有 `advice` 欄位，
+ * 前端得用快照當時存下的價位自行重算 —— 本函式是純函式，
+ * 同一組價位算出來的就是當時該顯示的狀態。若讓兩邊各寫一份，
+ * 這個「同一組價位、兩種結論」的分歧正是這次要修掉的缺陷本身。
+ * 本模組刻意零依賴，後端 esbuild 打包與前端 Vite 建置都能直接內聯。
  */
 
 export type AdviceAction =
