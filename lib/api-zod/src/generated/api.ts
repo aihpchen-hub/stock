@@ -110,7 +110,14 @@ export const StockDetailResponse = zod.object({
   "foreignNetDays": zod.number().nullish().describe('外資30日淨買超相當於幾日平均成交量'),
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
-  "officialIndustry": zod.string().nullish().describe('官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照')
+  "officialIndustry": zod.string().nullish().describe('官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照'),
+  "ruleVersion": zod.number().optional().describe('計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正。'),
+  "advice": zod.object({
+  "action": zod.enum(['can_enter', 'wait_pullback', 'wait_breakout', 'stop_breached', 'insufficient_data']).describe('can_enter=現價落在進場區間內、 wait_pullback=區間在現價之下需等回檔、 wait_breakout=區間在現價之上需等突破、 stop_breached=現價已低於停損、 insufficient_data=缺少必要價位'),
+  "planKind": zod.enum(['immediate', 'pullback', 'conditional', 'none']).describe('進場區間相對於現價的位置。 conditional 表示區間在現價之上、計畫尚未成立，畫面必須以 「站回月線後的計畫」而非「建議買價」陳述那組價位； none 表示不得顯示任何價位。')
+}).optional().describe('由交易計畫的價位幾何推出的操作建議。只給列舉值，畫面文字由前端負責。'),
+  "chipsAsOf": zod.string().nullish().describe('三大法人買賣超資料的最後日期（YYYY-MM-DD）'),
+  "revenueAsOf": zod.string().nullish().describe('最近一筆月營收所屬年月（YYYY\/MM）。 與股價、法人各自獨立顯示 —— 三個來源的最新日期不一定相同， 合併成單一「更新時間」會蓋掉這個差異。')
 })
 
 

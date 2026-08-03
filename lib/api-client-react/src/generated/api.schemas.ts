@@ -201,6 +201,43 @@ export const StockDetailResultEntryTiming = {
   insufficient_data: 'insufficient_data',
 } as const;
 
+/**
+ * can_enter=現價落在進場區間內、 wait_pullback=區間在現價之下需等回檔、 wait_breakout=區間在現價之上需等突破、 stop_breached=現價已低於停損、 insufficient_data=缺少必要價位
+ */
+export type StockDetailResultAdviceAction = typeof StockDetailResultAdviceAction[keyof typeof StockDetailResultAdviceAction];
+
+
+export const StockDetailResultAdviceAction = {
+  can_enter: 'can_enter',
+  wait_pullback: 'wait_pullback',
+  wait_breakout: 'wait_breakout',
+  stop_breached: 'stop_breached',
+  insufficient_data: 'insufficient_data',
+} as const;
+
+/**
+ * 進場區間相對於現價的位置。 conditional 表示區間在現價之上、計畫尚未成立，畫面必須以 「站回月線後的計畫」而非「建議買價」陳述那組價位； none 表示不得顯示任何價位。
+ */
+export type StockDetailResultAdvicePlanKind = typeof StockDetailResultAdvicePlanKind[keyof typeof StockDetailResultAdvicePlanKind];
+
+
+export const StockDetailResultAdvicePlanKind = {
+  immediate: 'immediate',
+  pullback: 'pullback',
+  conditional: 'conditional',
+  none: 'none',
+} as const;
+
+/**
+ * 由交易計畫的價位幾何推出的操作建議。只給列舉值，畫面文字由前端負責。
+ */
+export type StockDetailResultAdvice = {
+  /** can_enter=現價落在進場區間內、 wait_pullback=區間在現價之下需等回檔、 wait_breakout=區間在現價之上需等突破、 stop_breached=現價已低於停損、 insufficient_data=缺少必要價位 */
+  action: StockDetailResultAdviceAction;
+  /** 進場區間相對於現價的位置。 conditional 表示區間在現價之上、計畫尚未成立，畫面必須以 「站回月線後的計畫」而非「建議買價」陳述那組價位； none 表示不得顯示任何價位。 */
+  planKind: StockDetailResultAdvicePlanKind;
+};
+
 export interface StockDetailResult {
   code: string;
   /** 本次計算採用的分析週期（未帶參數時為 3m） */
@@ -280,6 +317,14 @@ export interface StockDetailResult {
   stockName?: string | null;
   /** 官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照 */
   officialIndustry?: string | null;
+  /** 計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正。 */
+  ruleVersion?: number;
+  /** 由交易計畫的價位幾何推出的操作建議。只給列舉值，畫面文字由前端負責。 */
+  advice?: StockDetailResultAdvice;
+  /** 三大法人買賣超資料的最後日期（YYYY-MM-DD） */
+  chipsAsOf?: string | null;
+  /** 最近一筆月營收所屬年月（YYYY/MM）。 與股價、法人各自獨立顯示 —— 三個來源的最新日期不一定相同， 合併成單一「更新時間」會蓋掉這個差異。 */
+  revenueAsOf?: string | null;
 }
 
 export type StockDetailParams = {
