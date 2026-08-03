@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/use-settings';
 import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
 import { AnalyzeRequestPeriod, useVerifyOutcomes, VerifyOutcomesResult } from '@workspace/api-client-react';
-import { buildVerifyGroups } from '@/lib/verify';
+import { buildVerifyGroups, isRipe } from '@/lib/verify';
 
 const CHIPS = [
   'AI水冷散熱', '矽光子', 'CoWoS封裝', 'HBM記憶體', '伺服器供應鏈', 'AI PC', '散熱模組', '電源管理IC'
@@ -55,6 +55,16 @@ export default function Home() {
       alert('驗證失敗，請稍後再試。');
     }
   };
+
+  /**
+   * 有沒有「夠舊到值得驗證」的紀錄。
+   *
+   * 前瞻驗證只看得懂存超過七個日曆日的計畫 —— 更新的紀錄還沒走完足夠的交易日，
+   * 幾乎必然是「仍持有」，對不出任何結論。先前這個區塊只要有任何紀錄就顯示，
+   * 於是剛開始用的人只會看到一個按下去回「沒有足夠時間的歷史紀錄」的按鈕。
+   * 改成沒有可驗證的紀錄時整塊不渲染，紀錄養夠了它才會帶著真實數據出現。
+   */
+  const hasRipeHistory = useMemo(() => history.some((entry) => isRipe(entry.createdAt)), [history]);
 
   // Group history by keyword
   const groupedHistory = useMemo(() => {
@@ -187,8 +197,8 @@ export default function Home() {
           )}
         </section>
 
-        {/* Verification Section */}
-        {history.length > 0 && (
+        {/* Verification Section —— 只在有夠舊的紀錄時出現，見 hasRipeHistory */}
+        {hasRipeHistory && (
           <section className="bg-card border border-border rounded-2xl p-6 space-y-6">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle2 className="w-5 h-5 text-accent" />
