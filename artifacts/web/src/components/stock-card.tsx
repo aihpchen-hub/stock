@@ -1,6 +1,6 @@
 import React from 'react';
 import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
-import { deriveAdvice } from '@workspace/advice';
+import { deriveAdvice, deriveInvalidation } from '@workspace/advice';
 import { RiskSettings, planPosition } from '@/lib/settings';
 import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
@@ -63,6 +63,10 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     trend,
     trendBasis,
     volume,
+    invalidation,
+    stopBasis,
+    narrative,
+    swingLow,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -76,6 +80,17 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
       entryLow: entryLow ?? null,
       entryHigh: entryHigh ?? null,
       stopLoss: stopLoss ?? null,
+    });
+
+  // 與 advice 同樣的理由：舊快照沒有 invalidation 欄位，用快照存下的價位
+  // 自行補算。deriveInvalidation 是純函式，算出來的就是當時該顯示的內容。
+  const effectiveInvalidation =
+    invalidation ??
+    deriveInvalidation({
+      planKind: effectiveAdvice.planKind,
+      stopLoss: stopLoss ?? null,
+      swingLow: swingLow ?? null,
+      period: period ?? null,
     });
 
   // Plan position
@@ -229,6 +244,14 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
           priceAsOf={priceAsOf}
         />
 
+        {/* 摘要由已算出的欄位模板組句，不呼叫模型 —— 因此永遠不會與
+            下方的數字牴觸。模型敘述做不到這一點，而它就印在數字旁邊。 */}
+        {narrative && (
+          <p className="text-sm leading-relaxed text-foreground/90 bg-muted/30 border border-border rounded-lg p-3">
+            {narrative}
+          </p>
+        )}
+
         <h4 className="text-sm font-bold text-muted-foreground flex items-center gap-2">
           <Target className="w-4 h-4" />
           {/* 區間在現價之上時那組價位講的是「假如站回月線之後」，
@@ -255,6 +278,22 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
               <div>
                 <div className="text-xs text-destructive mb-1 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 停損</div>
                 <div className="font-mono font-medium text-destructive">{stopLoss}</div>
+                {/* 只給一個數字，使用者無從判斷這個停損是踩在結構上還是懸空的 ——
+                    同樣是 115 元，落在近 20 日低點之下與之上，被掃出場的機率完全不同 */}
+                {stopBasis && (
+                  <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                    {stopBasis.text}
+                    {(stopBasis.reference?.swingLow != null || stopBasis.reference?.ma20 != null) && (
+                      <>
+                        <br />
+                        對照：
+                        {stopBasis.reference.swingLow != null && `近20日低 ${stopBasis.reference.swingLow}`}
+                        {stopBasis.reference.swingLow != null && stopBasis.reference.ma20 != null && '、'}
+                        {stopBasis.reference.ma20 != null && `月線 ${stopBasis.reference.ma20}`}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-xs text-primary mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> 停利</div>
@@ -293,6 +332,33 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                     單張最大虧損: <strong className="text-destructive font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
                   </span>
                 </div>
+
+                {/* 後端的 riskRewardRatio 是毛值，用的是價差。實際下單要付
+                    兩趟手續費與一趟證交稅，賠率因此一定比毛值差 —— 而畫面
+                    先前只印毛值，等於系統性地把每一筆交易講得比實際好。
+                    低價股尤其明顯：手續費有 20 元低收，價差被固定成本吃掉的
+                    比例遠高於高價股。 */}
+                {(() => {
+                  if (economics.netRiskPerLot <= 0) return null;
+                  const netRR = economics.netRewardPerLot / economics.netRiskPerLot;
+                  if (!Number.isFinite(netRR)) return null;
+                  return (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        扣費後風報比:{' '}
+                        <strong className={netRR < 1 ? 'text-destructive' : 'text-foreground'}>
+                          {netRR.toFixed(2)}
+                        </strong>
+                      </span>
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        單張淨獲利:{' '}
+                        <strong className="text-primary font-mono">
+                          NT$ {economics.netRewardPerLot.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        </strong>
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* 風報比低於 1 代表停利距離比停損距離還短 —— 就算看對方向，
                     賺的也比看錯時賠的少。這與「現在能不能進場」是兩回事：
@@ -376,6 +442,14 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                   移動停損起始: <strong className="font-mono text-foreground">{trailingStop}</strong>
                 </div>
               )}
+            </div>
+
+            {/* 計畫在什麼情況下不再成立。少了這塊，使用者只知道什麼時候該買，
+                不知道什麼時候該承認這次判斷錯了 —— 而後者才是真正會虧錢的那一半。 */}
+            <div className="border-l-2 border-border pl-3 space-y-1 text-xs text-muted-foreground">
+              <div className="font-bold text-foreground/80">這份計畫何時失效</div>
+              <div>{effectiveInvalidation.priceReason}</div>
+              <div>{effectiveInvalidation.expiryReason}</div>
             </div>
           </div>
         ) : (

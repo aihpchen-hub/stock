@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveAdvice, type AdviceInput } from "./index";
+import { deriveAdvice, deriveInvalidation, type AdviceInput } from "./index";
 
 /** 站上均線、現價落在區間內的中性起點，各測試只覆寫需要的欄位 */
 function input(over: Partial<AdviceInput> = {}): AdviceInput {
@@ -61,5 +61,55 @@ describe("deriveAdvice", () => {
     ]) {
       expect(deriveAdvice(i).planKind).toBe("none");
     }
+  });
+});
+
+describe("deriveInvalidation", () => {
+  const base = { planKind: "immediate" as const, stopLoss: 90, swingLow: 85, period: "3m" };
+
+  it("已成立的計畫以停損為失效價", () => {
+    for (const planKind of ["immediate", "pullback"] as const) {
+      const r = deriveInvalidation({ ...base, planKind });
+      expect(r.priceLevel).toBe(90);
+      expect(r.priceReason).toContain("90");
+    }
+  });
+
+  it("尚未成立的計畫以近 20 日低點為失效價，不用停損", () => {
+    // 停損是由「假設中的進場價」往下推 2 個 ATR 得來的，那個進場價還沒發生
+    const r = deriveInvalidation({ ...base, planKind: "conditional" });
+    expect(r.priceLevel).toBe(85);
+    expect(r.priceReason).toContain("結構");
+    expect(r.priceReason).not.toContain("停損");
+  });
+
+  it("planKind 為 none 時不給失效價位", () => {
+    const r = deriveInvalidation({ ...base, planKind: "none" });
+    expect(r.priceLevel).toBeNull();
+  });
+
+  it("時間門檻依週期：1m→10、3m→20、6m→30", () => {
+    for (const [period, days] of [["1m", 10], ["3m", 20], ["6m", 30]] as const) {
+      expect(deriveInvalidation({ ...base, period }).expiresAfterTradingDays).toBe(days);
+    }
+  });
+
+  it("認不得的週期與缺值都退回基準週期 3m", () => {
+    expect(deriveInvalidation({ ...base, period: "99y" }).expiresAfterTradingDays).toBe(20);
+    expect(deriveInvalidation({ ...base, period: null }).expiresAfterTradingDays).toBe(20);
+  });
+
+  it("時間門檻必須標明未經驗證 —— 與三情境機率的標示方式一致", () => {
+    expect(deriveInvalidation(base).expiryReason).toContain("未經驗證");
+  });
+
+  it("缺價位時說明缺什麼，不輸出破碎的句子", () => {
+    const noStop = deriveInvalidation({ ...base, stopLoss: null });
+    expect(noStop.priceLevel).toBeNull();
+    expect(noStop.priceReason).toContain("缺少停損價");
+
+    const noSwing = deriveInvalidation({ ...base, planKind: "conditional", swingLow: null });
+    expect(noSwing.priceLevel).toBeNull();
+    expect(noSwing.priceReason).toContain("缺少近 20 日低點");
   });
 });

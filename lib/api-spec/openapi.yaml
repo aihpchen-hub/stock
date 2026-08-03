@@ -331,6 +331,56 @@ components:
         tally:
           $ref: "#/components/schemas/OutcomeTally"
       required: [results, tally]
+    Invalidation:
+      type: object
+      description: >-
+        這份計畫在什麼情況下不再成立。價格與時間兩條各自獨立。
+      properties:
+        priceLevel:
+          type: number
+          nullable: true
+          description: >-
+            跌破此價位即失效。已成立的計畫用停損；尚未成立的計畫用近 20 日低點 ——
+            停損是由「假設中的進場價」往下推 2 個 ATR 得來的，那個進場價還沒發生，
+            拿它當失效線等於用一個不存在的部位的風險上限描述現在的處境。
+        priceReason:
+          type: string
+        expiresAfterTradingDays:
+          type: integer
+          description: 1m→10、3m→20、6m→30。**經驗值，未經驗證**，畫面必須標示。
+        expiryReason:
+          type: string
+      required: [priceLevel, priceReason, expiresAfterTradingDays, expiryReason]
+    StopBasis:
+      type: object
+      description: >-
+        停損的依據。演算法完全沒變 —— 改的只是把算式與結構對照講出來。
+        同樣是 115 元，落在近 20 日低點之下與之上，被掃出場的機率完全不同。
+        刻意不改用結構性停損：前低是任意選定的結構（為何是 20 日而非 10 或 60？），
+        換上去會同時改變風報比與建議張數，卻沒有驗證支撐那個選擇。
+      properties:
+        method:
+          type: string
+          enum: [atr_volatility]
+        text:
+          type: string
+          description: 可驗算的算式
+        atr:
+          type: number
+        factor:
+          type: number
+          description: 時間尺度係數
+        reference:
+          type: object
+          description: 結構對照 —— 停損相對於它們的位置才是重點
+          properties:
+            swingLow:
+              type: number
+              nullable: true
+            ma20:
+              type: number
+              nullable: true
+      required: [method, text, atr, factor, reference]
     Signal:
       type: object
       description: >-
@@ -702,6 +752,19 @@ components:
           required:
             - action
             - planKind
+        invalidation:
+          $ref: "#/components/schemas/Invalidation"
+        stopBasis:
+          oneOf:
+            - $ref: "#/components/schemas/StopBasis"
+            - type: "null"
+        narrative:
+          type: string
+          nullable: true
+          description: >-
+            由已算出的欄位組成的中文摘要。**模板組句，不呼叫任何模型** ——
+            因此永遠不會與畫面上的數字牴觸。任一欄位缺席時該段整句略過。
+            planKind 為 none 時整段價位不入句，不把畫面剛抑制掉的矛盾用文字重講一次。
         chipsAsOf:
           type: string
           nullable: true

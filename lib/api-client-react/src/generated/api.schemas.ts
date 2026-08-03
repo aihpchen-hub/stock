@@ -153,6 +153,47 @@ export interface VerifyOutcomesResult {
 }
 
 /**
+ * 這份計畫在什麼情況下不再成立。價格與時間兩條各自獨立。
+ */
+export interface Invalidation {
+  /** 跌破此價位即失效。已成立的計畫用停損；尚未成立的計畫用近 20 日低點 —— 停損是由「假設中的進場價」往下推 2 個 ATR 得來的，那個進場價還沒發生， 拿它當失效線等於用一個不存在的部位的風險上限描述現在的處境。 */
+  priceLevel: number | null;
+  priceReason: string;
+  /** 1m→10、3m→20、6m→30。**經驗值，未經驗證**，畫面必須標示。 */
+  expiresAfterTradingDays: number;
+  expiryReason: string;
+}
+
+export type StopBasisMethod = typeof StopBasisMethod[keyof typeof StopBasisMethod];
+
+
+export const StopBasisMethod = {
+  atr_volatility: 'atr_volatility',
+} as const;
+
+/**
+ * 結構對照 —— 停損相對於它們的位置才是重點
+ */
+export type StopBasisReference = {
+  swingLow?: number | null;
+  ma20?: number | null;
+};
+
+/**
+ * 停損的依據。演算法完全沒變 —— 改的只是把算式與結構對照講出來。 同樣是 115 元，落在近 20 日低點之下與之上，被掃出場的機率完全不同。 刻意不改用結構性停損：前低是任意選定的結構（為何是 20 日而非 10 或 60？）， 換上去會同時改變風報比與建議張數，卻沒有驗證支撐那個選擇。
+ */
+export interface StopBasis {
+  method: StopBasisMethod;
+  /** 可驗算的算式 */
+  text: string;
+  atr: number;
+  /** 時間尺度係數 */
+  factor: number;
+  /** 結構對照 —— 停損相對於它們的位置才是重點 */
+  reference: StopBasisReference;
+}
+
+/**
  * neutral 用於爆量與量縮 —— 兩者本身都不指向任何一邊， 爆量可以是突破起漲也可以是高檔出貨。
  */
 export type SignalDirection = typeof SignalDirection[keyof typeof SignalDirection];
@@ -475,6 +516,10 @@ export interface StockDetailResult {
   ruleVersion?: number;
   /** 由交易計畫的價位幾何推出的操作建議。只給列舉值，畫面文字由前端負責。 */
   advice?: StockDetailResultAdvice;
+  invalidation?: Invalidation;
+  stopBasis?: StopBasis | null;
+  /** 由已算出的欄位組成的中文摘要。**模板組句，不呼叫任何模型** —— 因此永遠不會與畫面上的數字牴觸。任一欄位缺席時該段整句略過。 planKind 為 none 時整段價位不入句，不把畫面剛抑制掉的矛盾用文字重講一次。 */
+  narrative?: string | null;
   /** 三大法人買賣超資料的最後日期（YYYY-MM-DD） */
   chipsAsOf?: string | null;
   /** 最近一筆月營收所屬年月（YYYY/MM）。 與股價、法人各自獨立顯示 —— 三個來源的最新日期不一定相同， 合併成單一「更新時間」會蓋掉這個差異。 */

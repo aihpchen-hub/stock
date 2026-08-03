@@ -79,3 +79,78 @@ export function deriveAdvice(input: AdviceInput): AdviceOutput {
 
   return { action: "can_enter", planKind: "immediate" };
 }
+
+/**
+ * 計畫的失效條件。
+ *
+ * 刻意不併進 `AdviceOutput` —— `advice` 這個欄位已經存進使用者的
+ * localStorage 快照裡，改變它的形狀會讓舊快照多出一半的缺欄位。
+ * 分成獨立的純函式，前端就能用快照當時存下的價位自行補算，
+ * 與 `deriveAdvice` 的處理方式一致。
+ */
+export interface InvalidationInput {
+  planKind: PlanKind;
+  stopLoss: number | null;
+  /** 近 20 日最低價 —— 計畫尚未成立時，結構破壞看的是這個而非停損 */
+  swingLow: number | null;
+  /** 分析週期 1m/3m/6m。認不得或缺值時當基準週期 3m */
+  period: string | null;
+}
+
+export interface Invalidation {
+  /** 跌破此價位即失效。null 代表目前沒有可陳述的價位 */
+  priceLevel: number | null;
+  priceReason: string;
+  /** 超過此交易日數仍未進場即失效 */
+  expiresAfterTradingDays: number;
+  expiryReason: string;
+}
+
+/**
+ * 各週期的「等不到就算了」天數。
+ *
+ * 經驗值，**未經驗證** —— 與三情境機率的標示方式一致，
+ * 畫面必須寫明這一點，不能讓它看起來像回測出來的結論。
+ */
+const EXPIRY_TRADING_DAYS: Record<string, number> = { "1m": 10, "3m": 20, "6m": 30 };
+
+export function deriveInvalidation(input: InvalidationInput): Invalidation {
+  const { planKind, stopLoss, swingLow, period } = input;
+
+  const days = EXPIRY_TRADING_DAYS[period ?? "3m"] ?? EXPIRY_TRADING_DAYS["3m"]!;
+  const expiryReason = `超過 ${days} 個交易日仍未進場即視為失效（經驗值，未經驗證）`;
+
+  // 計畫尚未成立時，該守的不是停損而是結構。停損是由「假設中的進場價」
+  // 往下推 2 個 ATR 得來的，那個進場價還沒發生 —— 拿它當失效線，
+  // 等於用一個不存在的部位的風險上限去描述現在的處境。
+  if (planKind === "conditional") {
+    return {
+      priceLevel: swingLow,
+      priceReason:
+        swingLow === null
+          ? "缺少近 20 日低點，無法給出結構失效價位"
+          : `在站回進場區之前先跌破近 20 日低點 ${swingLow}，代表結構已破壞，這份計畫不再成立`,
+      expiresAfterTradingDays: days,
+      expiryReason,
+    };
+  }
+
+  if (planKind === "immediate" || planKind === "pullback") {
+    return {
+      priceLevel: stopLoss,
+      priceReason:
+        stopLoss === null
+          ? "缺少停損價，無法給出失效價位"
+          : `進場後跌破停損 ${stopLoss}，這份計畫即告失效，不再往下攤平`,
+      expiresAfterTradingDays: days,
+      expiryReason,
+    };
+  }
+
+  return {
+    priceLevel: null,
+    priceReason: "目前不提供進場計畫，沒有可陳述的失效價位",
+    expiresAfterTradingDays: days,
+    expiryReason,
+  };
+}

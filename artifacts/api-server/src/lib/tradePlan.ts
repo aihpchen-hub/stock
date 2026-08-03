@@ -48,6 +48,44 @@ export function bullAtrMultiple(score: number): number {
   return 1.5;
 }
 
+/**
+ * 停損的依據說明。
+ *
+ * 演算法完全不變 —— 改的只是「把算式與對照講出來」。
+ * 先前畫面只給一個數字，使用者無從判斷那個停損是踩在結構上還是懸空的：
+ * 同樣是 115 元，落在近 20 日低點之下與之上，被掃出場的機率完全不同。
+ *
+ * 刻意不改用結構性停損（前低）：前低是任意選定的結構
+ * （為何是 20 日而非 10 或 60 日？），換上去會同時改變風報比與建議張數，
+ * 卻沒有任何驗證支撐那個選擇。並列顯示讓使用者自己判斷。
+ */
+export interface StopBasis {
+  method: "atr_volatility";
+  /** 可驗算的算式 */
+  text: string;
+  atr: number;
+  /** 時間尺度係數 */
+  factor: number;
+  /** 結構對照 —— 停損相對於它們的位置才是重點 */
+  reference: { swingLow: number | null; ma20: number | null };
+}
+
+export function buildStopBasis(
+  atr: number | null,
+  factor: number,
+  reference: { swingLow: number | null; ma20: number | null },
+): StopBasis | null {
+  if (atr === null || atr <= 0) return null;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    method: "atr_volatility",
+    text: `進場中值 − ${Math.abs(BEAR_ATR_MULTIPLE)}×ATR(14) ${round2(atr)} × 時間尺度係數 ${factor.toFixed(2)}`,
+    atr: round2(atr),
+    factor: round2(factor),
+    reference,
+  };
+}
+
 export type EntryTiming = "now" | "wait_pullback" | "avoid" | "insufficient_data";
 
 export type EvSignal = "strong_buy" | "buy" | "watch_positive" | "watch_negative" | "avoid";

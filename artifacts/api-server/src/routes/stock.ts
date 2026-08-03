@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { deriveAdvice } from "@workspace/advice";
+import { deriveAdvice, deriveInvalidation } from "@workspace/advice";
 
 import {
   calcATR,
@@ -13,7 +13,8 @@ import {
   type PriceRow,
 } from "../lib/indicators";
 import { detectSignals, detectTrend } from "../lib/signals";
-import { PERIOD_TRADING_DAYS, calcEV, horizonFactor } from "../lib/tradePlan";
+import { PERIOD_TRADING_DAYS, buildStopBasis, calcEV, horizonFactor } from "../lib/tradePlan";
+import { buildNarrative } from "../lib/narrative";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
 import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind, toDateStr } from "../lib/finmind";
@@ -251,6 +252,38 @@ router.get("/stock/:code", async (req, res) => {
     });
     const trend = detectTrend(closes, ma20, ma60);
 
+    // ── 停損依據與失效條件（第三階段） ─────────────────────────────────────
+    const swingLow = swing.low !== null ? Math.round(swing.low * 100) / 100 : null;
+    const stopBasis = buildStopBasis(atr, horizonFactor(period), {
+      swingLow,
+      ma20: ma20 !== null ? Math.round(ma20 * 100) / 100 : null,
+    });
+
+    // 尚未成立的計畫看的是結構（近 20 日低）而非停損 ——
+    // 停損是由「假設中的進場價」推出來的，那個進場價還沒發生。
+    const invalidation = deriveInvalidation({
+      planKind: advice.planKind,
+      stopLoss: ev.stopLoss,
+      swingLow,
+      period,
+    });
+
+    const narrative = buildNarrative({
+      name: info?.stock_name ?? null,
+      code,
+      trend: trend.trend,
+      action: advice.action,
+      planKind: advice.planKind,
+      signals,
+      foreignNet5d: chips.foreign.windows.d5,
+      foreignTrend: chips.foreign.trend,
+      entryLow: ev.entryLow,
+      entryHigh: ev.entryHigh,
+      stopLoss: ev.stopLoss,
+      riskRewardRatio: ev.riskRewardRatio,
+      period,
+    });
+
     // 三個來源各自標日期。FinMind 的法人資料與股價未必同步更新，
     // 合成一個「更新時間」會把這個差異蓋掉。
     const chipsAsOf = institutionals.reduce<string | null>(
@@ -298,6 +331,9 @@ router.get("/stock/:code", async (req, res) => {
       revenueAsOf: revenueHistory[0]?.yearMonth ?? null,
       ruleVersion: RULE_VERSION,
       advice,
+      invalidation,
+      stopBasis,
+      narrative,
       stockName: info?.stock_name ?? null,
       officialIndustry: info?.industry_category ?? null,
       atr: atr !== null ? Math.round(atr * 100) / 100 : null,
