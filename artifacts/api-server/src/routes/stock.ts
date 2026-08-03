@@ -9,6 +9,7 @@ import {
   type PriceRow,
 } from "../lib/indicators";
 import { PERIOD_TRADING_DAYS, calcEV, horizonFactor } from "../lib/tradePlan";
+import { deriveAdvice } from "../lib/advice";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
 import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind } from "../lib/finmind";
@@ -25,6 +26,13 @@ const router = Router();
  * 而日線資料本來就延遲一天，同一天內重複抓只會得到同一份數字。
  */
 const stockCache = dailyCacheFor<Record<string, unknown>>();
+
+/**
+ * 計算規則版本。任何會改變畫面上顯示數字的變更都必須遞增，
+ * 並同步更新 `stockCacheKey` 的版本前綴 —— 前瞻驗證靠這個值分辨
+ * 每筆快照是哪一套規則算出來的。
+ */
+const RULE_VERSION = 2;
 
 /** 只接受規格中的三個值，其餘（含未帶參數）一律當基準週期 */
 function normalizePeriod(raw: unknown): string {
@@ -170,6 +178,22 @@ router.get("/stock/:code", async (req, res) => {
     const rawTrailing = calcTrailingStop(entryMid, atr, horizonFactor(period));
     const trailingStop = rawTrailing === null ? null : roundToTick(rawTrailing);
 
+    // 由價位幾何推出「現在能不能買」。必須在 calcEV 之後 ——
+    // 它讀的是算完並取整後的進場區與停損。
+    const advice = deriveAdvice({
+      currentPrice,
+      entryLow: ev.entryLow,
+      entryHigh: ev.entryHigh,
+      stopLoss: ev.stopLoss,
+    });
+
+    // 三個來源各自標日期。FinMind 的法人資料與股價未必同步更新，
+    // 合成一個「更新時間」會把這個差異蓋掉。
+    const chipsAsOf = institutionals.reduce<string | null>(
+      (latest, row) => (latest === null || row.date > latest ? row.date : latest),
+      null,
+    );
+
     const payload = {
       code,
       period,
@@ -184,6 +208,10 @@ router.get("/stock/:code", async (req, res) => {
       trustNet30d: trustNet,
       dealerNet30d: dealerNet,
       priceAsOf,
+      chipsAsOf,
+      revenueAsOf: revenueHistory[0]?.yearMonth ?? null,
+      ruleVersion: RULE_VERSION,
+      advice,
       stockName: info?.stock_name ?? null,
       officialIndustry: info?.industry_category ?? null,
       atr: atr !== null ? Math.round(atr * 100) / 100 : null,
