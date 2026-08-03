@@ -4,8 +4,8 @@ import { Search, History, Settings, CheckCircle2, ChevronDown, ChevronRight, X, 
 import { useSettings } from '@/hooks/use-settings';
 import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
-import { AnalyzeRequestPeriod, useVerifyOutcomes } from '@workspace/api-client-react';
-import { buildVerifyItems, OUTCOME_LABEL } from '@/lib/verify';
+import { AnalyzeRequestPeriod, useVerifyOutcomes, VerifyOutcomesResult } from '@workspace/api-client-react';
+import { buildVerifyGroups } from '@/lib/verify';
 
 const CHIPS = [
   'AI水冷散熱', '矽光子', 'CoWoS封裝', 'HBM記憶體', '伺服器供應鏈', 'AI PC', '散熱模組', '電源管理IC'
@@ -25,7 +25,8 @@ export default function Home() {
   const { history, removeHistory, clearHistory } = useHistory();
   const verifyOutcomes = useVerifyOutcomes();
 
-  const [verifyResult, setVerifyResult] = useState<any>(null);
+  type VerifySummary = { ruleVersion: number; tally: VerifyOutcomesResult['tally'] };
+  const [verifyResults, setVerifyResults] = useState<VerifySummary[] | null>(null);
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -35,24 +36,23 @@ export default function Home() {
 
   const handleVerify = async () => {
     try {
-      const items = await buildVerifyItems(history);
-      if (items.length === 0) {
+      const groups = await buildVerifyGroups(history);
+      if (groups.length === 0) {
         alert('目前沒有足夠時間（> 5天）的歷史紀錄可供驗證。');
         return;
       }
-      verifyOutcomes.mutate(
-        { data: { items } },
-        {
-          onSuccess: (data) => {
-            setVerifyResult(data);
-          },
-          onError: () => {
-            alert('驗證失敗，請稍後再試。');
-          }
-        }
+      // 逐版本各打一次 —— 後端一次最多收 40 筆，而不同規則算出來的計畫
+      // 合併統計會得到一個量不到任何東西的達標率
+      const summaries = await Promise.all(
+        groups.map(async (g) => ({
+          ruleVersion: g.ruleVersion,
+          tally: (await verifyOutcomes.mutateAsync({ data: { items: g.items } })).tally,
+        })),
       );
+      setVerifyResults(summaries);
     } catch (err) {
       console.error(err);
+      alert('驗證失敗，請稍後再試。');
     }
   };
 
@@ -205,30 +205,39 @@ export default function Home() {
               {verifyOutcomes.isPending ? '驗證中...' : '對答案'}
             </button>
 
-            {verifyResult && (
-              <div className="mt-6 space-y-4 p-4 bg-background rounded-xl border border-border">
+            {verifyResults?.map(({ ruleVersion, tally }) => (
+              <div
+                key={ruleVersion}
+                className="mt-6 space-y-4 p-4 bg-background rounded-xl border border-border"
+              >
                 <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <span className="text-muted-foreground">達標率</span>
+                  <div>
+                    <span className="text-muted-foreground">達標率</span>
+                    <span className="ml-2 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
+                      規則 v{ruleVersion}
+                    </span>
+                  </div>
                   <span className="text-2xl font-bold text-primary">
-                    {verifyResult.tally.targetRate != null ? `${(verifyResult.tally.targetRate * 100).toFixed(1)}%` : 'N/A'}
+                    {/* targetRate 後端已經是百分比（3/4 回 75），不可再乘 100 */}
+                    {tally.targetRate != null ? `${tally.targetRate.toFixed(1)}%` : '尚無結論'}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-sm">
                   <div className="bg-muted rounded p-2">
-                    <div className="text-primary font-bold">{verifyResult.tally.target}</div>
+                    <div className="text-primary font-bold">{tally.target}</div>
                     <div className="text-muted-foreground text-xs mt-1">達標</div>
                   </div>
                   <div className="bg-muted rounded p-2">
-                    <div className="text-destructive font-bold">{verifyResult.tally.stop}</div>
+                    <div className="text-destructive font-bold">{tally.stop}</div>
                     <div className="text-muted-foreground text-xs mt-1">停損</div>
                   </div>
                   <div className="bg-muted rounded p-2">
-                    <div className="text-foreground font-bold">{verifyResult.tally.open}</div>
+                    <div className="text-foreground font-bold">{tally.open}</div>
                     <div className="text-muted-foreground text-xs mt-1">仍持有</div>
                   </div>
                 </div>
               </div>
-            )}
+            ))}
           </section>
         )}
       </div>

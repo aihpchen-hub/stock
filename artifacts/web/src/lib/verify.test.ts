@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import stub from '../../../../test/localStorageStub';
 import { save, type AnalysisSnapshot } from './history';
-import { buildVerifyItems, isRipe, itemsFromSnapshot, toDateKey } from './verify';
+import {
+  LEGACY_RULE_VERSION,
+  buildVerifyGroups,
+  buildVerifyItems,
+  isRipe,
+  itemsFromSnapshot,
+  toDateKey,
+} from './verify';
 
 beforeEach(() => stub.__reset());
 
@@ -117,5 +124,46 @@ describe('buildVerifyItems', () => {
     const index = await save(snapshot({ id: 'gone', createdAt: now - 30 * DAY }));
     stub.__reset(); // 清掉快照本體，模擬資料遺失
     expect(await buildVerifyItems(index, now)).toEqual([]);
+  });
+});
+
+describe('buildVerifyGroups', () => {
+  const now = new Date(2026, 6, 20).getTime();
+
+  /** 同一份快照裡兩檔標的分屬不同規則版本 —— 用來確認分組看的是每一筆而非整份快照 */
+  function mixedSnapshot() {
+    const s = snapshot({ id: 'mixed', createdAt: now - 30 * DAY });
+    s.stockDetails['3363'] = { ...s.stockDetails['3363'], ruleVersion: 2 };
+    // 3081 刻意不給 ruleVersion，代表規則第一版留下的舊資料
+    return s;
+  }
+
+  it('依規則版本分組，新版排在前面', async () => {
+    const index = await save(mixedSnapshot());
+    const groups = await buildVerifyGroups(index, now);
+    expect(groups.map((g) => g.ruleVersion)).toEqual([2, 1]);
+  });
+
+  it('沒有 ruleVersion 的舊快照視為初版', async () => {
+    const index = await save(snapshot({ id: 'legacy', createdAt: now - 30 * DAY }));
+    const groups = await buildVerifyGroups(index, now);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].ruleVersion).toBe(LEGACY_RULE_VERSION);
+    expect(groups[0].items).toHaveLength(2);
+  });
+
+  it('分組後的總筆數與不分組時相同 —— 不得漏掉任何一筆', async () => {
+    const index = await save(mixedSnapshot());
+    const flat = await buildVerifyItems(index, now);
+    const groups = await buildVerifyGroups(index, now);
+    expect(groups.reduce((sum, g) => sum + g.items.length, 0)).toBe(flat.length);
+  });
+
+  it('同樣只取夠舊的快照', async () => {
+    await save(mixedSnapshot());
+    const index = await save(snapshot({ id: 'fresh', createdAt: now - 1 * DAY }));
+    const groups = await buildVerifyGroups(index, now);
+    // fresh 那兩筆不夠舊，只剩 mixed 的兩筆分成兩組
+    expect(groups.reduce((sum, g) => sum + g.items.length, 0)).toBe(2);
   });
 });
