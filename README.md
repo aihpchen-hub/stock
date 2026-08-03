@@ -121,6 +121,7 @@ CI=true netlify build --offline --filter @workspace/web
 | API 契約（唯一真實來源） | `lib/api-spec/openapi.yaml` |
 | 指標計算（ATR、均線、擺盪、均量） | `artifacts/api-server/src/lib/indicators.ts` |
 | 評分、三情境期望值、交易計畫 | `artifacts/api-server/src/lib/tradePlan.ts` |
+| 操作建議狀態機（現在能不能買） | `artifacts/api-server/src/lib/advice.ts` |
 | 台股檔位（最小升降單位） | `artifacts/api-server/src/lib/ticks.ts` |
 | 前瞻驗證（事後對答案） | `artifacts/api-server/src/lib/outcome.ts` |
 | 快取（儲存層／以日失效） | `artifacts/api-server/src/lib/cacheStore.ts`、`dailyCache.ts` |
