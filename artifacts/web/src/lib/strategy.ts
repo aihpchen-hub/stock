@@ -20,9 +20,9 @@ const STRATEGIES: Record<string, Strategy> = {
 };
 
 /** 基準週期，與後端 `normalizePeriod` 的預設一致 */
-const DEFAULT: Strategy = { label: '波段', detail: '約 3 個月' };
+const DEFAULT_PERIOD = '3m';
 
 /** 週期缺失或不在規格內時一律以基準週期陳述，不顯示空白標籤 */
 export function strategyFor(period?: string | null): Strategy {
-  return STRATEGIES[period ?? ''] ?? DEFAULT;
+  return STRATEGIES[period ?? ''] ?? STRATEGIES[DEFAULT_PERIOD];
 }
