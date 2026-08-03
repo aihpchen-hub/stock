@@ -5,6 +5,7 @@ import { RiskSettings, planPosition } from '@/lib/settings';
 import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
+import { ChipsPanel } from '@/components/stock/chips-panel';
 import { DataFreshness } from '@/components/data-freshness';
 import { strategyFor } from '@/lib/strategy';
 
@@ -56,6 +57,7 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     revenueAsOf,
     period,
     avgVolume20,
+    chips,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -179,18 +181,24 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
         </div>
 
         {/* Financial Metrics */}
-        <div className="grid grid-cols-2 gap-3">
-          <MetricCard label="MA 位置" value={formatMaSignal(maSignal)} />
-          <MetricCard 
-            label="月營收 YoY" 
-            value={revenueYoY != null ? `${revenueYoY > 0 ? '+' : ''}${revenueYoY.toFixed(1)}%` : '-'} 
-            isPositive={revenueYoY ? revenueYoY > 0 : undefined}
-          />
-          <MetricCard label="外資30日" value={formatInstitutional(foreignNet30d)} />
-          <MetricCard label="投信30日" value={formatInstitutional(trustNet30d)} />
-          {/* 20 日均量後端一直有算，只是從來沒顯示。缺了它，一張再漂亮的計畫
-              也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。 */}
-          <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard label="MA 位置" value={formatMaSignal(maSignal)} />
+            <MetricCard
+              label="月營收 YoY"
+              value={revenueYoY != null ? `${revenueYoY > 0 ? '+' : ''}${revenueYoY.toFixed(1)}%` : '-'}
+              isPositive={revenueYoY ? revenueYoY > 0 : undefined}
+            />
+            {/* 20 日均量後端一直有算，只是從來沒顯示。缺了它，一張再漂亮的計畫
+                也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。 */}
+            <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+            {/* 舊快照沒有 chips 欄位，退回原本的單一累積數字。
+                這裡的天期標示刻意寫「約24日」而非「30日」—— 舊資料抓的是
+                35 個日曆日，從來就不是 30 個交易日。 */}
+            {!chips && <MetricCard label="外資（約24日）" value={formatInstitutional(foreignNet30d)} />}
+            {!chips && <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />}
+          </div>
+          {chips && <ChipsPanel chips={chips} chipsAsOf={chipsAsOf} />}
         </div>
       </div>
 

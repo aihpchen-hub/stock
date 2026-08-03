@@ -73,7 +73,7 @@ describe("stockCacheKey", () => {
   });
 
   it("帶規則版本前綴 —— 部署當天不會讀到缺少新欄位的舊 payload", () => {
-    expect(stockCacheKey("2330", "3m")).toContain("|v2|");
+    expect(stockCacheKey("2330", "3m")).toContain("|v3|");
   });
 });
 

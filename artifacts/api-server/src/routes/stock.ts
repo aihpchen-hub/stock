@@ -12,7 +12,8 @@ import {
 import { PERIOD_TRADING_DAYS, calcEV, horizonFactor } from "../lib/tradePlan";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
-import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind } from "../lib/finmind";
+import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind, toDateStr } from "../lib/finmind";
+import { buildChips, type InstitutionalRow } from "../lib/chips";
 import { dailyCacheFor } from "../lib/caches";
 import { stockCacheKey, today } from "../lib/dailyCache";
 
@@ -34,6 +35,30 @@ const stockCache = dailyCacheFor<Record<string, unknown>>();
  */
 const RULE_VERSION = 2;
 
+/**
+ * 法人資料的抓取範圍（日曆日）。
+ *
+ * 要算 20 個交易日的視窗至少需要 20 個開市日；30 個日曆日理論上剛好，
+ * 但農曆年連假一次就能吃掉 9 天以上，屆時 20 日窗會整個變成 null。
+ * 60 個日曆日 ≈ 40 個交易日，留足緩衝，而且成本不變 —— 同一次請求、
+ * 同一個資料集，只是起始日往前挪。
+ */
+const CHIPS_FETCH_DAYS = 60;
+
+/**
+ * 舊的「30日」累積所涵蓋的範圍（日曆日），刻意與抓取範圍分開。
+ *
+ * 這個數字不是顯示用的，而是餵給 calcEV 的評分輸入。抓取範圍從 35 拉到 60
+ * 之後，若仍照「把抓回來的資料整段加總」的寫法，這個值會無聲地從
+ * 約 24 個交易日變成約 40 個 —— 評分跟著漂移，卻沒有任何版本號能區分
+ * 前後兩批快照。因此把它釘在原本的視窗上，改評分基準是另一件事，
+ * 要做就要連同 RULE_VERSION 一起遞增。
+ *
+ * （順帶一提，35 個日曆日約等於 24 個交易日，欄位名稱裡的「30日」
+ * 從一開始就不是 30 個交易日。）
+ */
+const LEGACY_CHIPS_DAYS = 35;
+
 /** 只接受規格中的三個值，其餘（含未帶參數）一律當基準週期 */
 function normalizePeriod(raw: unknown): string {
   return typeof raw === "string" && raw in PERIOD_TRADING_DAYS ? raw : "3m";
@@ -45,13 +70,6 @@ interface RevenueRow {
   revenue: number;
   revenue_month: number;
   revenue_year: number;
-}
-
-interface InstitutionalRow {
-  date: string;
-  name: string;
-  buy: number;
-  sell: number;
 }
 
 // ─── GET /api/stock/:code ──────────────────────────────────────────────────
@@ -79,7 +97,9 @@ router.get("/stock/:code", async (req, res) => {
     const [prices, revenues, institutionals, info] = await Promise.all([
       fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(150), token)),
       fetchFinMind<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
-      fetchFinMind<InstitutionalRow>(buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(35), token)),
+      fetchFinMind<InstitutionalRow>(
+        buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(CHIPS_FETCH_DAYS), token),
+      ),
       resolveStock(code),
     ]);
 
@@ -138,12 +158,16 @@ router.get("/stock/:code", async (req, res) => {
       revenueYoY = revenueHistory[0]?.yoy ?? null;
     }
 
-    // ── Institutional 30d aggregate ────────────────────────────────────────
+    // ── Institutional 30d aggregate（評分輸入，視窗釘死） ──────────────────
+    // 只加總落在 LEGACY_CHIPS_DAYS 之內的記錄。抓取範圍已擴大到 60 日，
+    // 少了這道過濾，餵給 calcEV 的數字會跟著變大。
+    const legacyStart = toDateStr(dateMinusDays(LEGACY_CHIPS_DAYS));
     let foreignNet = 0;
     let trustNet = 0;
     let dealerNet = 0;
 
     for (const d of institutionals) {
+      if (typeof d.date !== "string" || d.date < legacyStart) continue;
       const net = (d.buy ?? 0) - (d.sell ?? 0); // units: shares (股)
       const n = d.name ?? "";
       if (n === "Foreign_Investor" || n === "Foreign_Dealer_Self") {
@@ -156,6 +180,10 @@ router.get("/stock/:code", async (req, res) => {
     }
 
     const institutionalNet30d = foreignNet + trustNet + dealerNet;
+
+    // ── 多天期籌碼（顯示用） ───────────────────────────────────────────────
+    // 以交易日切窗，與上面那組釘死的累積各走各的，互不影響。
+    const chips = buildChips(institutionals, avgVolume20);
 
     // ── Phase 4: EV engine ─────────────────────────────────────────────────
     const ev = calcEV({
@@ -207,6 +235,7 @@ router.get("/stock/:code", async (req, res) => {
       foreignNet30d: foreignNet,
       trustNet30d: trustNet,
       dealerNet30d: dealerNet,
+      chips,
       priceAsOf,
       chipsAsOf,
       revenueAsOf: revenueHistory[0]?.yearMonth ?? null,

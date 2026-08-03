@@ -331,6 +331,73 @@ components:
         tally:
           $ref: "#/components/schemas/OutcomeTally"
       required: [results, tally]
+    ChipWindows:
+      type: object
+      description: >-
+        同一法人別在四個天期的累積淨買超（股數，可為負）。
+        天期以「交易日」計，不是日曆日 —— 資料本身只有開市日，
+        用日曆天數切會在連假後少算好幾天。
+        資料不足該天期時為 null，不以較少的天數硬湊。
+      properties:
+        d1:
+          type: number
+          nullable: true
+          description: 最近一個交易日
+        d5:
+          type: number
+          nullable: true
+        d10:
+          type: number
+          nullable: true
+        d20:
+          type: number
+          nullable: true
+      required: [d1, d5, d10, d20]
+    InvestorChips:
+      type: object
+      properties:
+        windows:
+          $ref: "#/components/schemas/ChipWindows"
+        trend:
+          type: string
+          enum:
+            - accumulating
+            - slowing
+            - reversing_down
+            - distributing
+            - easing
+            - reversing_up
+            - neutral
+            - insufficient_data
+          description: >-
+            以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述，
+            以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%），
+            長短天期各自判斷 —— 只用 20 日門檻的話，
+            近期的決斷動作會被長天期的平淡蓋掉。
+            accumulating=買超且買盤加強、slowing=買超但退潮、
+            reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、
+            distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、
+            reversing_up=近5日明顯站在買方而20日累積並未支持該方向、
+            neutral=長短天期參與率都太低、
+            insufficient_data=不足20個交易日。
+      required: [windows, trend]
+    Chips:
+      type: object
+      description: >-
+        三大法人的多天期籌碼。單一 30 日累積會被較久以前的資料稀釋 ——
+        前 15 天大買、近 5 天連續調節，累積數字仍是正的，
+        卻正好蓋掉最該被看到的轉折。
+      properties:
+        tradingDays:
+          type: integer
+          description: 實際取得的交易日數，用於說明為何某些天期為 null
+        foreign:
+          $ref: "#/components/schemas/InvestorChips"
+        trust:
+          $ref: "#/components/schemas/InvestorChips"
+        dealer:
+          $ref: "#/components/schemas/InvestorChips"
+      required: [tradingDays, foreign, trust, dealer]
     StockDetailResult:
       type: object
       properties:
@@ -377,6 +444,8 @@ components:
         dealerNet30d:
           type: number
           description: 自營商30日淨買超（股數）
+        chips:
+          $ref: "#/components/schemas/Chips"
         evScore:
           type: number
           description: 綜合評分（-7 到 7）

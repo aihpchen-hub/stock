@@ -153,6 +153,51 @@ export interface VerifyOutcomesResult {
 }
 
 /**
+ * 同一法人別在四個天期的累積淨買超（股數，可為負）。 天期以「交易日」計，不是日曆日 —— 資料本身只有開市日， 用日曆天數切會在連假後少算好幾天。 資料不足該天期時為 null，不以較少的天數硬湊。
+ */
+export interface ChipWindows {
+  /** 最近一個交易日 */
+  d1: number | null;
+  d5: number | null;
+  d10: number | null;
+  d20: number | null;
+}
+
+/**
+ * 以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述， 以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%）， 長短天期各自判斷 —— 只用 20 日門檻的話， 近期的決斷動作會被長天期的平淡蓋掉。 accumulating=買超且買盤加強、slowing=買超但退潮、 reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、 distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、 reversing_up=近5日明顯站在買方而20日累積並未支持該方向、 neutral=長短天期參與率都太低、 insufficient_data=不足20個交易日。
+ */
+export type InvestorChipsTrend = typeof InvestorChipsTrend[keyof typeof InvestorChipsTrend];
+
+
+export const InvestorChipsTrend = {
+  accumulating: 'accumulating',
+  slowing: 'slowing',
+  reversing_down: 'reversing_down',
+  distributing: 'distributing',
+  easing: 'easing',
+  reversing_up: 'reversing_up',
+  neutral: 'neutral',
+  insufficient_data: 'insufficient_data',
+} as const;
+
+export interface InvestorChips {
+  windows: ChipWindows;
+  /** 以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述， 以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%）， 長短天期各自判斷 —— 只用 20 日門檻的話， 近期的決斷動作會被長天期的平淡蓋掉。 accumulating=買超且買盤加強、slowing=買超但退潮、 reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、 distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、 reversing_up=近5日明顯站在買方而20日累積並未支持該方向、 neutral=長短天期參與率都太低、 insufficient_data=不足20個交易日。 */
+  trend: InvestorChipsTrend;
+}
+
+/**
+ * 三大法人的多天期籌碼。單一 30 日累積會被較久以前的資料稀釋 —— 前 15 天大買、近 5 天連續調節，累積數字仍是正的， 卻正好蓋掉最該被看到的轉折。
+ */
+export interface Chips {
+  /** 實際取得的交易日數，用於說明為何某些天期為 null */
+  tradingDays: number;
+  foreign: InvestorChips;
+  trust: InvestorChips;
+  dealer: InvestorChips;
+}
+
+/**
  * 本次計算採用的分析週期（未帶參數時為 3m）
  */
 export type StockDetailResultPeriod = typeof StockDetailResultPeriod[keyof typeof StockDetailResultPeriod];
@@ -259,6 +304,7 @@ export interface StockDetailResult {
   trustNet30d?: number;
   /** 自營商30日淨買超（股數） */
   dealerNet30d?: number;
+  chips?: Chips;
   /** 綜合評分（-7 到 7） */
   evScore?: number;
   /** 多頭情境機率（0–1） */
