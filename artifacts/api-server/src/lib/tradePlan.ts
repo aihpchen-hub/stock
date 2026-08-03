@@ -179,11 +179,22 @@ export function calcEV(input: EVInput): EVOutput {
       entryLow = roundToTick(ma20);
       entryHigh = roundToTick(ma20 + 0.3 * atr);
     } else {
+      // 離月線超過兩個 ATR 視為追高。
+      const chasing = currentPrice - ma20 > 2 * atr;
+
       // 站上均線：等回檔一個 ATR 之內，且不低於 MA20。
       entryLow = roundToTick(Math.min(Math.max(ma20, currentPrice - atr), currentPrice));
-      entryHigh = roundToTick(currentPrice);
-      // 離月線超過兩個 ATR 視為追高。
-      entryTiming = currentPrice - ma20 > 2 * atr ? "wait_pullback" : "now";
+
+      // 判定追高時上緣必須低於現價。上緣等於現價的話，畫面會一邊寫
+      // 「等待回檔」、一邊給出含現價的區間 —— 使用者照著看會以為現在就能買。
+      entryHigh = roundToTick(chasing ? currentPrice - 0.3 * atr : currentPrice);
+
+      // 取整到檔位後兩端可能塌到同一格（高價股的檔位是 5 元，而 0.7×ATR
+      // 可能不到半個檔位）。下緣高於上緣是無效區間，夾回來即可 ——
+      // 此時區間退化成單一價位，仍低於現價，語意不變。
+      if (entryHigh < entryLow) entryHigh = entryLow;
+
+      entryTiming = chasing ? "wait_pullback" : "now";
     }
 
     // 進場區間用未縮放的 ATR：那是「等回檔多少才進場」的即期問題，與持有期間無關。

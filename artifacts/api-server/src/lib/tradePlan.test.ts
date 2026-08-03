@@ -167,6 +167,39 @@ describe("calcEV 交易計畫", () => {
     expect(strong.ev).toBeGreaterThan(8);
     expect(strong.evSignal).toBe("strong_buy");
   });
+
+  describe("追高分支的進場區間", () => {
+    it("判定追高時上緣壓在現價之下 —— 否則畫面一邊說等回檔、一邊給含現價的區間", () => {
+      // 現價 100、月線 85、ATR 5 → 100−85=15 > 2×5，判定追高
+      const out = calcEV(input({ currentPrice: 100, ma20: 85, ma60: 80, atr: 5 }));
+      expect(out.entryTiming).toBe("wait_pullback");
+      expect(out.entryHigh!).toBeLessThan(100);
+    });
+
+    it("未追高時上緣仍為現價", () => {
+      const out = calcEV(input({ currentPrice: 100, ma20: 95, ma60: 90, atr: 5 }));
+      expect(out.entryTiming).toBe("now");
+      expect(out.entryHigh).toBe(100);
+    });
+
+    it("各種波動與價位下，進場下緣都不高於上緣", () => {
+      // 取整到檔位後兩端可能塌到同一格，區間仍必須是合法區間
+      for (const currentPrice of [8, 45, 90, 300, 800, 1500]) {
+        for (const atr of [0.05, 0.5, 3, 12]) {
+          const out = calcEV(
+            input({
+              currentPrice,
+              ma20: currentPrice - 3 * atr,
+              ma60: currentPrice - 4 * atr,
+              atr,
+            }),
+          );
+          expect(out.entryTiming).toBe("wait_pullback");
+          expect(out.entryLow!).toBeLessThanOrEqual(out.entryHigh!);
+        }
+      }
+    });
+  });
 });
 
 describe("horizonFactor 時間尺度", () => {
