@@ -57,3 +57,7 @@ deno.lock
 
 # Local Netlify folder
 .netlify
+
+# Subagent-driven development 的暫存區（帳本、任務簡報、審查包）——
+# 純過程產物，實作紀錄留在 git history 裡。
+.superpowers/
