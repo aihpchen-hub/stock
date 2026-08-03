@@ -2,7 +2,7 @@ import React from 'react';
 import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
 import { deriveAdvice } from '@workspace/advice';
 import { RiskSettings, planPosition } from '@/lib/settings';
-import { lotEconomics, roundTripCostPct } from '@/lib/fees';
+import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { DataFreshness } from '@/components/data-freshness';
@@ -55,6 +55,7 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     chipsAsOf,
     revenueAsOf,
     period,
+    avgVolume20,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -187,6 +188,9 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
           />
           <MetricCard label="外資30日" value={formatInstitutional(foreignNet30d)} />
           <MetricCard label="投信30日" value={formatInstitutional(trustNet30d)} />
+          {/* 20 日均量後端一直有算，只是從來沒顯示。缺了它，一張再漂亮的計畫
+              也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。 */}
+          <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
         </div>
       </div>
 
@@ -250,12 +254,47 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                 
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground flex items-center gap-1">
-                    風報比: <strong className="text-foreground">{riskRewardRatio?.toFixed(2)}</strong>
+                    風報比:{' '}
+                    <strong
+                      className={
+                        riskRewardRatio != null && riskRewardRatio < 1
+                          ? 'text-destructive'
+                          : 'text-foreground'
+                      }
+                    >
+                      {riskRewardRatio?.toFixed(2)}
+                    </strong>
                   </span>
                   <span className="text-muted-foreground flex items-center gap-1">
                     單張最大虧損: <strong className="text-destructive font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
                   </span>
                 </div>
+
+                {/* 風報比低於 1 代表停利距離比停損距離還短 —— 就算看對方向，
+                    賺的也比看錯時賠的少。這與「現在能不能進場」是兩回事：
+                    價位可能完全允許進場，但這筆交易的賠率本身就不划算。
+                    先前畫面只印出數字，從不說它代表什麼。 */}
+                {riskRewardRatio != null && riskRewardRatio < 1 && (
+                  <div className="text-xs text-destructive/90 bg-destructive/10 p-2 rounded">
+                    ⚠️ 風報比低於 1：停利距離比停損距離短，即使方向看對，獲利也小於看錯時的虧損。
+                    這筆交易的賠率不利，與現在能否進場無關。
+                  </div>
+                )}
+
+                {/* 流動性：建議張數相對日均量的比例。門檻是經驗值、未經驗證，
+                    因此只陳述事實比例，由使用者自行判斷掛不掛得進去。 */}
+                {position.lots > 0 && avgVolume20 != null && avgVolume20 > 0 && (
+                  (() => {
+                    const pctOfVolume = ((position.lots * SHARES_PER_LOT) / avgVolume20) * 100;
+                    if (pctOfVolume < 1) return null;
+                    return (
+                      <div className="text-xs text-amber-500/90 bg-amber-500/10 p-2 rounded">
+                        ⚠️ 流動性：建議張數約當 20 日均量的 {pctOfVolume.toFixed(1)}%，
+                        成交量不足時可能不易以理想價格成交。
+                      </div>
+                    );
+                  })()
+                )}
                 {position.lots > 0 && position.limitedBy === 'risk' && (
                   <div className="text-xs text-amber-500/80 bg-amber-500/10 p-2 rounded">
                     ⚠️ 已達單筆風險上限 ({settings.riskBudget.toLocaleString()})，限制投入張數
@@ -368,4 +407,10 @@ function formatInstitutional(qty?: number) {
   if (!qty) return '-';
   const lots = Math.round(qty / 1000);
   return `${lots > 0 ? '+' : ''}${lots}張`;
+}
+
+/** 成交量後端以「股」為單位，畫面一律換算成張（台股一張 1000 股） */
+function formatVolume(shares?: number | null) {
+  if (shares == null || !Number.isFinite(shares) || shares <= 0) return '-';
+  return `${Math.round(shares / 1000).toLocaleString()}張`;
 }
