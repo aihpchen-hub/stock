@@ -121,7 +121,7 @@ CI=true netlify build --offline --filter @workspace/web
 | API 契約（唯一真實來源） | `lib/api-spec/openapi.yaml` |
 | 指標計算（ATR、均線、擺盪、均量） | `artifacts/api-server/src/lib/indicators.ts` |
 | 評分、三情境期望值、交易計畫 | `artifacts/api-server/src/lib/tradePlan.ts` |
-| 操作建議狀態機（現在能不能買） | `artifacts/api-server/src/lib/advice.ts` |
+| 操作建議狀態機（現在能不能買） | `lib/advice/src/index.ts`（前後端共用） |
 | 台股檔位（最小升降單位） | `artifacts/api-server/src/lib/ticks.ts` |
 | 前瞻驗證（事後對答案） | `artifacts/api-server/src/lib/outcome.ts` |
 | 快取（儲存層／以日失效） | `artifacts/api-server/src/lib/cacheStore.ts`、`dailyCache.ts` |
@@ -138,6 +138,7 @@ CI=true netlify build --offline --filter @workspace/web
 - **判斷層與計算層分開陳述。** 幅度由該檔自身 ATR 推得、可驗算；三情境機率與評分權重是經驗設定、**未經回測**，畫面上明確標示。
 - **快取分成「儲存位置」與「以日失效」兩層。** 正式環境是 serverless，模組層級的 Map 會因冷啟動與多實例而完全失效；抽開之後同一套失效邏輯可同時支撐 Netlify Blobs 與本機記憶體，且只需要測一次。
 - **每日配額不是安全邊界。** Blobs 沒有原子遞增，並行請求可能少算。它擋的是隨手寫的迴圈腳本燒光 Gemini 額度，不是有心人。
+- **操作建議狀態機放在 `lib/advice`，前後端共用同一份純函式。** 查詢紀錄存在 localStorage，舊快照沒有 `advice` 欄位；前端得用快照存下的價位自行重算，才不會把「站回月線後才成立」的價位當成現在的建議買價印出來。兩邊各寫一份判斷，等於重新製造「同一組價位、兩種結論」這個缺陷本身。該模組刻意零依賴，後端 esbuild 與前端 Vite 都直接內聯。
 
 ## 踩過的坑
 
