@@ -5,7 +5,7 @@
  * 所以畫面上不會出現兩組互相矛盾的數字。
  */
 
-import { roundToTick } from "./ticks";
+import { roundToTick, tickSize } from "./ticks";
 
 /** 台股一張 = 1000 股 */
 export const SHARES_PER_LOT = 1000;
@@ -185,14 +185,24 @@ export function calcEV(input: EVInput): EVOutput {
       // 站上均線：等回檔一個 ATR 之內，且不低於 MA20。
       entryLow = roundToTick(Math.min(Math.max(ma20, currentPrice - atr), currentPrice));
 
-      // 判定追高時上緣必須低於現價。上緣等於現價的話，畫面會一邊寫
-      // 「等待回檔」、一邊給出含現價的區間 —— 使用者照著看會以為現在就能買。
-      entryHigh = roundToTick(chasing ? currentPrice - 0.3 * atr : currentPrice);
+      if (chasing) {
+        // 上緣必須確實低於現價，否則畫面一邊寫「等待回檔」、一邊給出含現價的區間。
+        //
+        // 只減 0.3×ATR 不夠：取整會把不到半個檔位的差距吃回去（1500 元的股票
+        // 檔位是 5 元，0.3×ATR 常常連 1 元都不到），實測 24 種價位與波動組合中
+        // 有 9 種會彈回現價。壓不下去時就取現價往下一個檔位 ——
+        // 差一個檔位是「低於現價」的最小可下單表述。
+        const capped = roundToTick(currentPrice - 0.3 * atr);
+        const priceAtTick = roundToTick(currentPrice);
+        entryHigh =
+          capped < priceAtTick ? capped : roundToTick(priceAtTick - tickSize(priceAtTick));
 
-      // 取整到檔位後兩端可能塌到同一格（高價股的檔位是 5 元，而 0.7×ATR
-      // 可能不到半個檔位）。下緣高於上緣是無效區間，夾回來即可 ——
-      // 此時區間退化成單一價位，仍低於現價，語意不變。
-      if (entryHigh < entryLow) entryHigh = entryLow;
+        // 壓低上緣後可能低於下緣，此時下緣跟著下移。
+        // 區間退化成單一價位仍然合法，且仍在現價之下。
+        if (entryHigh < entryLow) entryLow = entryHigh;
+      } else {
+        entryHigh = roundToTick(currentPrice);
+      }
 
       entryTiming = chasing ? "wait_pullback" : "now";
     }

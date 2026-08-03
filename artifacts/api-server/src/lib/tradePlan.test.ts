@@ -182,8 +182,8 @@ describe("calcEV 交易計畫", () => {
       expect(out.entryHigh).toBe(100);
     });
 
-    it("各種波動與價位下，進場下緣都不高於上緣", () => {
-      // 取整到檔位後兩端可能塌到同一格，區間仍必須是合法區間
+    it("各種波動與價位下，追高的進場區間都確實落在現價之下且仍為有效區間", () => {
+      // 取整到檔位後上緣可能塌回現價 —— 逐點檢查，不是抽樣
       for (const currentPrice of [8, 45, 90, 300, 800, 1500]) {
         for (const atr of [0.05, 0.5, 3, 12]) {
           const out = calcEV(
@@ -195,6 +195,7 @@ describe("calcEV 交易計畫", () => {
             }),
           );
           expect(out.entryTiming).toBe("wait_pullback");
+          expect(out.entryHigh!).toBeLessThan(currentPrice);
           expect(out.entryLow!).toBeLessThanOrEqual(out.entryHigh!);
         }
       }
