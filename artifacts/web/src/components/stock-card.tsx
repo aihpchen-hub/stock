@@ -3,6 +3,9 @@ import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
 import { RiskSettings, planPosition } from '@/lib/settings';
 import { lotEconomics, roundTripCostPct } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
+import { AdviceBanner } from '@/components/stock/advice-banner';
+import { DataFreshness } from '@/components/data-freshness';
+import { strategyFor } from '@/lib/strategy';
 
 interface StockCardProps {
   stock: StockInfo;
@@ -45,6 +48,12 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     revenueYoY,
     foreignNet30d,
     trustNet30d,
+    advice,
+    currentPrice,
+    priceAsOf,
+    chipsAsOf,
+    revenueAsOf,
+    period,
   } = detail;
 
   // Plan position
@@ -95,6 +104,16 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
               </span>
             </div>
             <p className="text-sm text-muted-foreground">{stock.reason}</p>
+            <div className="mt-2 space-y-1">
+              <span className="inline-block px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded border border-border">
+                {strategyFor(period).label} · {strategyFor(period).detail}
+              </span>
+              <DataFreshness
+                priceAsOf={priceAsOf}
+                chipsAsOf={chipsAsOf}
+                revenueAsOf={revenueAsOf}
+              />
+            </div>
             {stock.reasonSource != null && (
               <span className="inline-flex items-center gap-1 text-xs text-accent mt-2 bg-accent/10 px-2 py-0.5 rounded">
                 <ExternalLink className="w-3 h-3" />
@@ -144,17 +163,37 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
       </div>
 
       {/* Trading Plan */}
-      <div className="p-5 bg-background/50 flex-1">
-        <h4 className="text-sm font-bold text-muted-foreground mb-4 flex items-center gap-2">
-          <Target className="w-4 h-4" /> 交易計畫
+      <div className="p-5 bg-background/50 flex-1 space-y-4">
+        <AdviceBanner
+          advice={advice}
+          currentPrice={currentPrice}
+          entryLow={entryLow}
+          entryHigh={entryHigh}
+          stopLoss={stopLoss}
+          priceAsOf={priceAsOf}
+        />
+
+        <h4 className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+          <Target className="w-4 h-4" />
+          {/* 區間在現價之上時那組價位講的是「假如站回月線之後」，
+              沿用「交易計畫」這個標題就是使用者看到矛盾數字的原因 */}
+          {advice?.planKind === 'conditional' ? '站回月線後的計畫（尚未成立）' : '交易計畫'}
         </h4>
-        
-        {entryLow && entryHigh && stopLoss && takeProfit ? (
+
+        {/* planKind 為 none 代表現價已跌破停損或資料不足 —— 那組價位的前提
+            已經不存在，印出來只會誤導，整塊不顯示 */}
+        {advice?.planKind === 'none' ? (
+          <div className="text-center py-6 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
+            目前不提供進場區間與停損停利
+          </div>
+        ) : entryLow && entryHigh && stopLoss && takeProfit ? (
           <div className="space-y-5">
             {/* Price Levels */}
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <div className="text-xs text-muted-foreground mb-1">進場區間</div>
+                <div className="text-xs text-muted-foreground mb-1">
+                  {advice?.planKind === 'conditional' ? '成立後進場區' : '進場區間'}
+                </div>
                 <div className="font-mono font-medium text-foreground">{entryLow} - {entryHigh}</div>
               </div>
               <div>
