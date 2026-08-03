@@ -60,9 +60,16 @@ export function analysisCacheKey(keyword: string, period: string): string {
   return `analysis|${keyword.trim().toLowerCase()}|${period}`;
 }
 
-/** 個股資料以「代號＋週期」為鍵 —— 不同週期算出來的交易計畫不同 */
+/**
+ * 個股資料以「代號＋週期」為鍵 —— 不同週期算出來的交易計畫不同。
+ *
+ * 版本前綴針對的是部署當天：快取雖然以日失效，但當天稍早寫入的 payload
+ * 是舊版程式產生的，缺少新欄位。沒有版本前綴時，使用者會拿到少一截欄位的
+ * 回應直到隔天 —— 而畫面對缺欄位的處理是整塊不渲染，看起來就像功能沒上線。
+ * 改版時遞增此處的版本號即可讓舊項目自然失效。
+ */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v2|${code.trim().toLowerCase()}|${period}`;
 }
 
 /** 當日日期字串（YYYY-MM-DD，本地時區）—— 使用者的「今天」以本地為準 */

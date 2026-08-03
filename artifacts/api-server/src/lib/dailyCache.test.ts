@@ -71,6 +71,10 @@ describe("stockCacheKey", () => {
   it("與分析結果不會撞鍵", () => {
     expect(stockCacheKey("2330", "3m")).not.toBe(analysisCacheKey("2330", "3m"));
   });
+
+  it("帶規則版本前綴 —— 部署當天不會讀到缺少新欄位的舊 payload", () => {
+    expect(stockCacheKey("2330", "3m")).toContain("|v2|");
+  });
 });
 
 describe("today", () => {
