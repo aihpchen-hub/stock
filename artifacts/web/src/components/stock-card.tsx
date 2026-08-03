@@ -6,6 +6,7 @@ import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
 import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { ChipsPanel } from '@/components/stock/chips-panel';
+import { SignalList } from '@/components/stock/signal-list';
 import { DataFreshness } from '@/components/data-freshness';
 import { strategyFor } from '@/lib/strategy';
 
@@ -58,6 +59,10 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     period,
     avgVolume20,
     chips,
+    signals,
+    trend,
+    trendBasis,
+    volume,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -190,8 +195,18 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
               isPositive={revenueYoY ? revenueYoY > 0 : undefined}
             />
             {/* 20 日均量後端一直有算，只是從來沒顯示。缺了它，一張再漂亮的計畫
-                也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。 */}
-            <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+                也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。
+                有量能剖面時改顯示當日量與倍數：只給均量回答不了
+                「今天的量算不算異常」。 */}
+            {volume ? (
+              <MetricCard
+                label={`當日量（均量 ${formatVolumeRatio(volume.ratio)}）`}
+                value={formatVolume(volume.latest)}
+                isPositive={volume.kind === 'surge' ? true : undefined}
+              />
+            ) : (
+              <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+            )}
             {/* 舊快照沒有 chips 欄位，退回原本的單一累積數字。
                 這裡的天期標示刻意寫「約24日」而非「30日」—— 舊資料抓的是
                 35 個日曆日，從來就不是 30 個交易日。 */}
@@ -199,6 +214,7 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
             {!chips && <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />}
           </div>
           {chips && <ChipsPanel chips={chips} chipsAsOf={chipsAsOf} />}
+          <SignalList signals={signals} trend={trend} trendBasis={trendBasis} />
         </div>
       </div>
 
@@ -421,4 +437,10 @@ function formatInstitutional(qty?: number) {
 function formatVolume(shares?: number | null) {
   if (shares == null || !Number.isFinite(shares) || shares <= 0) return '-';
   return `${Math.round(shares / 1000).toLocaleString()}張`;
+}
+
+/** 當日量相對於 20 日均量的倍數 */
+function formatVolumeRatio(ratio?: number | null) {
+  if (ratio == null || !Number.isFinite(ratio)) return '—';
+  return `${ratio.toFixed(2)}×`;
 }

@@ -69,7 +69,7 @@ export function analysisCacheKey(keyword: string, period: string): string {
  * 改版時遞增此處的版本號即可讓舊項目自然失效。
  */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|v3|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v4|${code.trim().toLowerCase()}|${period}`;
 }
 
 /** 當日日期字串（YYYY-MM-DD，本地時區）—— 使用者的「今天」以本地為準 */

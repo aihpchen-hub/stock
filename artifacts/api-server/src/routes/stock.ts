@@ -4,11 +4,15 @@ import { deriveAdvice } from "@workspace/advice";
 import {
   calcATR,
   calcAvgVolume,
+  calcKD,
   calcMA,
+  calcMACD,
   calcSwing,
   calcTrailingStop,
+  calcVolumeProfile,
   type PriceRow,
 } from "../lib/indicators";
+import { detectSignals, detectTrend } from "../lib/signals";
 import { PERIOD_TRADING_DAYS, calcEV, horizonFactor } from "../lib/tradePlan";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
@@ -33,7 +37,7 @@ const stockCache = dailyCacheFor<Record<string, unknown>>();
  * 並同步更新 `stockCacheKey` 的版本前綴 —— 前瞻驗證靠這個值分辨
  * 每筆快照是哪一套規則算出來的。
  */
-const RULE_VERSION = 2;
+const RULE_VERSION = 3;
 
 /**
  * 法人資料的抓取範圍（日曆日）。
@@ -44,6 +48,16 @@ const RULE_VERSION = 2;
  * 同一個資料集，只是起始日往前挪。
  */
 const CHIPS_FETCH_DAYS = 60;
+
+/**
+ * 股價的抓取範圍（日曆日）。
+ *
+ * 原本是 150 日曆日（≈102 根）。MACD 的 EMA 是遞迴的，種子的影響會隨
+ * 資料變長而衰減卻永遠不會歸零，EMA26 需要約 78 根之後才算穩定 ——
+ * 102 根算得出來但不寬裕，而且 MA60 也只多 42 根。
+ * 240 個日曆日 ≈ 163 根，兩者都留足餘裕，且仍是同一次請求。
+ */
+const PRICE_FETCH_DAYS = 240;
 
 /**
  * 舊的「30日」累積所涵蓋的範圍（日曆日），刻意與抓取範圍分開。
@@ -95,7 +109,7 @@ router.get("/stock/:code", async (req, res) => {
     // 150 個日曆日 ≈ 102 個交易日。原本的 100 日只有約 68 個交易日，MA60 僅多 8 根，
     // 遇到連假或暫停交易就可能算不出來。
     const [prices, revenues, institutionals, info] = await Promise.all([
-      fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(150), token)),
+      fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(PRICE_FETCH_DAYS), token)),
       fetchFinMind<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
       fetchFinMind<InstitutionalRow>(
         buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(CHIPS_FETCH_DAYS), token),
@@ -112,6 +126,9 @@ router.get("/stock/:code", async (req, res) => {
     const priceAsOf = prices[prices.length - 1]?.date ?? null;
     const swing = calcSwing(prices);
     const avgVolume20 = calcAvgVolume(prices);
+    const macd = calcMACD(closes);
+    const kd = calcKD(prices);
+    const volume = calcVolumeProfile(prices);
 
     let maSignal: "above_both" | "above_ma20" | "below_both" | "insufficient_data" =
       "insufficient_data";
@@ -186,6 +203,8 @@ router.get("/stock/:code", async (req, res) => {
     const chips = buildChips(institutionals, avgVolume20);
 
     // ── Phase 4: EV engine ─────────────────────────────────────────────────
+    // 籌碼改以 20 個交易日為基準（規則版本 3）。舊的 `foreignNet`／`trustNet`
+    // 仍在 payload 中供舊快照對照，但不再參與評分。
     const ev = calcEV({
       revenueYoY,
       maSignal,
@@ -193,8 +212,9 @@ router.get("/stock/:code", async (req, res) => {
       ma20,
       ma60,
       atr,
-      foreignNet30dShares: foreignNet,
-      trustNet30dShares: trustNet,
+      foreignNet20dShares: chips.foreign.windows.d20,
+      trustNet20dShares: chips.trust.windows.d20,
+      foreignTrend: chips.foreign.trend,
       period,
     });
 
@@ -214,6 +234,22 @@ router.get("/stock/:code", async (req, res) => {
       entryHigh: ev.entryHigh,
       stopLoss: ev.stopLoss,
     });
+
+    // ── 訊號依據與趨勢（只做顯示，不進評分） ───────────────────────────────
+    // 命名刻意不是「AI 推薦原因」：這些全由程式規則算出，而 Gemini 的呼叫
+    // 發生在抓取個股資料之前，模型從未看過任何價格數字。
+    const signals = detectSignals({
+      closes,
+      rows: prices,
+      ma20,
+      ma60,
+      macd,
+      kd,
+      volume,
+      chips,
+      revenueYoY,
+    });
+    const trend = detectTrend(closes, ma20, ma60);
 
     // 三個來源各自標日期。FinMind 的法人資料與股價未必同步更新，
     // 合成一個「更新時間」會把這個差異蓋掉。
@@ -236,6 +272,27 @@ router.get("/stock/:code", async (req, res) => {
       trustNet30d: trustNet,
       dealerNet30d: dealerNet,
       chips,
+      signals,
+      trend: trend.trend,
+      trendBasis: trend.basis,
+      macd: macd === null ? null : {
+        dif: Math.round(macd.dif * 100) / 100,
+        dea: Math.round(macd.dea * 100) / 100,
+        osc: Math.round(macd.osc * 100) / 100,
+        cross: macd.cross,
+      },
+      kd: kd === null ? null : {
+        k: Math.round(kd.k * 10) / 10,
+        d: Math.round(kd.d * 10) / 10,
+        cross: kd.cross,
+      },
+      volume: volume === null ? null : {
+        latest: volume.latest,
+        avg5: volume.avg5,
+        avg20: Math.round(volume.avg20),
+        ratio: Math.round(volume.ratio * 100) / 100,
+        kind: volume.kind,
+      },
       priceAsOf,
       chipsAsOf,
       revenueAsOf: revenueHistory[0]?.yearMonth ?? null,

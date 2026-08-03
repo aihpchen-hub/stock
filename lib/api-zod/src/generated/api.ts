@@ -91,6 +91,7 @@ export const StockDetailResponse = zod.object({
   "d10": zod.number().nullable(),
   "d20": zod.number().nullable()
 }).describe('同一法人別在四個天期的累積淨買超（股數，可為負）。 天期以「交易日」計，不是日曆日 —— 資料本身只有開市日， 用日曆天數切會在連假後少算好幾天。 資料不足該天期時為 null，不以較少的天數硬湊。'),
+  "streak": zod.number().describe('連續買賣超天數：正數為連買、負數為連賣、0 為最近一日打平或無資料。 與視窗累積互補 —— 連續 8 天小買和「1 天大買、7 天觀望」的 5 日累積可能相同，但前者是持續建倉、後者只是一次性調節。'),
   "trend": zod.enum(['accumulating', 'slowing', 'reversing_down', 'distributing', 'easing', 'reversing_up', 'neutral', 'insufficient_data']).describe('以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述， 以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%）， 長短天期各自判斷 —— 只用 20 日門檻的話， 近期的決斷動作會被長天期的平淡蓋掉。 accumulating=買超且買盤加強、slowing=買超但退潮、 reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、 distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、 reversing_up=近5日明顯站在買方而20日累積並未支持該方向、 neutral=長短天期參與率都太低、 insufficient_data=不足20個交易日。')
 }),
   "trust": zod.object({
@@ -100,6 +101,7 @@ export const StockDetailResponse = zod.object({
   "d10": zod.number().nullable(),
   "d20": zod.number().nullable()
 }).describe('同一法人別在四個天期的累積淨買超（股數，可為負）。 天期以「交易日」計，不是日曆日 —— 資料本身只有開市日， 用日曆天數切會在連假後少算好幾天。 資料不足該天期時為 null，不以較少的天數硬湊。'),
+  "streak": zod.number().describe('連續買賣超天數：正數為連買、負數為連賣、0 為最近一日打平或無資料。 與視窗累積互補 —— 連續 8 天小買和「1 天大買、7 天觀望」的 5 日累積可能相同，但前者是持續建倉、後者只是一次性調節。'),
   "trend": zod.enum(['accumulating', 'slowing', 'reversing_down', 'distributing', 'easing', 'reversing_up', 'neutral', 'insufficient_data']).describe('以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述， 以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%）， 長短天期各自判斷 —— 只用 20 日門檻的話， 近期的決斷動作會被長天期的平淡蓋掉。 accumulating=買超且買盤加強、slowing=買超但退潮、 reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、 distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、 reversing_up=近5日明顯站在買方而20日累積並未支持該方向、 neutral=長短天期參與率都太低、 insufficient_data=不足20個交易日。')
 }),
   "dealer": zod.object({
@@ -109,10 +111,37 @@ export const StockDetailResponse = zod.object({
   "d10": zod.number().nullable(),
   "d20": zod.number().nullable()
 }).describe('同一法人別在四個天期的累積淨買超（股數，可為負）。 天期以「交易日」計，不是日曆日 —— 資料本身只有開市日， 用日曆天數切會在連假後少算好幾天。 資料不足該天期時為 null，不以較少的天數硬湊。'),
+  "streak": zod.number().describe('連續買賣超天數：正數為連買、負數為連賣、0 為最近一日打平或無資料。 與視窗累積互補 —— 連續 8 天小買和「1 天大買、7 天觀望」的 5 日累積可能相同，但前者是持續建倉、後者只是一次性調節。'),
   "trend": zod.enum(['accumulating', 'slowing', 'reversing_down', 'distributing', 'easing', 'reversing_up', 'neutral', 'insufficient_data']).describe('以近 5 日相對於近 20 日的力道變化判定。方向是否值得陳述， 以「淨額佔該期間總成交量的比例」衡量（門檻 2.5%）， 長短天期各自判斷 —— 只用 20 日門檻的話， 近期的決斷動作會被長天期的平淡蓋掉。 accumulating=買超且買盤加強、slowing=買超但退潮、 reversing_down=近5日明顯站在賣方而20日累積並未支持該方向、 distributing=賣超且賣壓加強、easing=賣超但賣壓減輕、 reversing_up=近5日明顯站在買方而20日累積並未支持該方向、 neutral=長短天期參與率都太低、 insufficient_data=不足20個交易日。')
 })
 }).optional().describe('三大法人的多天期籌碼。單一 30 日累積會被較久以前的資料稀釋 —— 前 15 天大買、近 5 天連續調節，累積數字仍是正的， 卻正好蓋掉最該被看到的轉折。'),
-  "evScore": zod.number().optional().describe('綜合評分（-7 到 7）'),
+  "signals": zod.array(zod.object({
+  "key": zod.string().describe('ma_bull_stack／ma_bear_stack／macd_golden／macd_dead／ kd_golden／kd_dead／kd_overbought／foreign_streak／trust_streak／ volume_surge／volume_breakout／volume_dry／revenue_growth'),
+  "label": zod.string(),
+  "direction": zod.enum(['bullish', 'bearish', 'neutral']).describe('neutral 用於爆量與量縮 —— 兩者本身都不指向任何一邊， 爆量可以是突破起漲也可以是高檔出貨。'),
+  "detail": zod.string()
+}).describe('一條可顯示的訊號依據。全部由程式規則算出，\*\*不是模型判斷\*\* —— Gemini 的呼叫發生在抓取個股資料之前，模型從未看過任何價格數字。 每一條的 detail 都寫出可驗算的具體數值。 這些訊號只做顯示，不進入評分公式。')).optional().describe('訊號依據。空陣列代表沒有任何條件成立，不是資料缺失。'),
+  "trend": zod.enum(['uptrend', 'downtrend', 'range']).optional().describe('三個條件同時成立才算趨勢：均線相對位置、MA20 斜率、收盤價相對月線。 其餘一律 range —— 不硬把盤整說成趨勢。'),
+  "trendBasis": zod.string().optional().describe('趨勢判定的依據，直接寫出四個實際數值供驗算'),
+  "macd": zod.union([zod.object({
+  "dif": zod.number(),
+  "dea": zod.number(),
+  "osc": zod.number().describe('柱體 = DIF − DEA'),
+  "cross": zod.enum(['golden', 'dead']).nullish().describe('僅在最近 3 根內發生交叉時有值。交叉是事件不是狀態 —— 永遠回報「目前 DIF 在 DEA 之上」會讓三個月前的交叉今天仍顯示為新訊號。')
+}),zod.null()]).optional(),
+  "kd": zod.union([zod.object({
+  "k": zod.number(),
+  "d": zod.number(),
+  "cross": zod.enum(['golden', 'dead']).nullish()
+}),zod.null()]).optional(),
+  "volume": zod.union([zod.object({
+  "latest": zod.number().describe('最近一個交易日的成交量（股）'),
+  "avg5": zod.number().nullish(),
+  "avg20": zod.number(),
+  "ratio": zod.number().describe('最新量 ÷ 20 日均量'),
+  "kind": zod.enum(['surge', 'expanding', 'normal', 'shrinking']).describe('surge ≥2×、expanding 1.3~2×、normal 0.7~1.3×、shrinking <0.7×')
+}).describe('只給 20 日均量無法回答「今天的量算不算異常」，那需要當日量與比值'),zod.null()]).optional(),
+  "evScore": zod.number().optional().describe('綜合評分。實際範圍 -7 到 8（營收 ±3／均線 ±2／外資 ±2／投信 ±0.5／ 籌碼趨勢 ±0.5）。先前文件寫「-7 到 7」是錯的，改版前的真實範圍是 -6.5 到 7.5。三情境機率的分段門檻是 4／2／0／-2，不依賴此上下限。'),
   "pBull": zod.number().optional().describe('多頭情境機率（0–1）'),
   "pBase": zod.number().optional().describe('基準情境機率（0–1）'),
   "pBear": zod.number().optional().describe('空頭情境機率（0–1）'),
@@ -141,7 +170,7 @@ export const StockDetailResponse = zod.object({
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
   "officialIndustry": zod.string().nullish().describe('官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照'),
-  "ruleVersion": zod.number().optional().describe('計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正。'),
+  "ruleVersion": zod.number().optional().describe('計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正、 3=評分改用 20 個交易日籌碼並加入趨勢修正。'),
   "advice": zod.object({
   "action": zod.enum(['can_enter', 'wait_pullback', 'wait_breakout', 'stop_breached', 'insufficient_data']).describe('can_enter=現價落在進場區間內、 wait_pullback=區間在現價之下需等回檔、 wait_breakout=區間在現價之上需等突破、 stop_breached=現價已低於停損、 insufficient_data=缺少必要價位'),
   "planKind": zod.enum(['immediate', 'pullback', 'conditional', 'none']).describe('進場區間相對於現價的位置。 conditional 表示區間在現價之上、計畫尚未成立，畫面必須以 「站回月線後的計畫」而非「建議買價」陳述那組價位； none 表示不得顯示任何價位。')

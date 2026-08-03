@@ -19,8 +19,8 @@ function input(over: Partial<EVInput> = {}): EVInput {
     ma20: 95,
     ma60: 90,
     atr: 5,
-    foreignNet30dShares: 0,
-    trustNet30dShares: 0,
+    foreignNet20dShares: 0,
+    trustNet20dShares: 0,
     ...over,
   };
 }
@@ -44,16 +44,72 @@ describe("calcScore", () => {
     expect(calcScore(input({ maSignal: "below_both" }))).toBe(-2);
   });
 
-  it("外資買賣超以張為級距（輸入為股數）", () => {
-    // 2,000,001 股 = 2000.001 張，超過 2000 張門檻
-    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet30dShares: 2_000_001 }))).toBe(2);
-    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet30dShares: 1_000 }))).toBe(1);
-    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet30dShares: -3_000_000 }))).toBe(-2);
+  it("外資買賣超以張為級距（輸入為股數），20 日門檻為 1300 張", () => {
+    // 1,300,001 股 = 1300.001 張，剛好超過門檻
+    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet20dShares: 1_300_001 }))).toBe(2);
+    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet20dShares: 1_300_000 }))).toBe(1);
+    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet20dShares: 1_000 }))).toBe(1);
+    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet20dShares: -1_300_001 }))).toBe(-2);
+    expect(calcScore(input({ maSignal: "insufficient_data", foreignNet20dShares: -1_000 }))).toBe(-1);
   });
 
-  it("投信只給正負 0.5 的微調", () => {
-    expect(calcScore(input({ maSignal: "insufficient_data", trustNet30dShares: 600_000 }))).toBe(0.5);
-    expect(calcScore(input({ maSignal: "insufficient_data", trustNet30dShares: -600_000 }))).toBe(-0.5);
+  it("投信只給正負 0.5 的微調，20 日門檻為 350 張", () => {
+    expect(calcScore(input({ maSignal: "insufficient_data", trustNet20dShares: 350_001 }))).toBe(0.5);
+    expect(calcScore(input({ maSignal: "insufficient_data", trustNet20dShares: 350_000 }))).toBe(0);
+    expect(calcScore(input({ maSignal: "insufficient_data", trustNet20dShares: -350_001 }))).toBe(-0.5);
+  });
+
+  it("籌碼資料不足 20 個交易日時不計分，不用較短天數硬湊", () => {
+    expect(
+      calcScore(
+        input({
+          maSignal: "insufficient_data",
+          foreignNet20dShares: null,
+          trustNet20dShares: null,
+        }),
+      ),
+    ).toBe(0);
+  });
+
+  it("籌碼趨勢只看力道強弱，不看方向", () => {
+    const base = { maSignal: "insufficient_data" } as const;
+    // 買盤加強、賣壓減輕、近期轉買 —— 資金流向都往買方傾斜
+    for (const trend of ["accumulating", "easing", "reversing_up"] as const) {
+      expect(calcScore(input({ ...base, foreignTrend: trend }))).toBe(0.5);
+    }
+    // 買盤退潮、賣壓加強、近期轉賣
+    for (const trend of ["slowing", "distributing", "reversing_down"] as const) {
+      expect(calcScore(input({ ...base, foreignTrend: trend }))).toBe(-0.5);
+    }
+    for (const trend of ["neutral", "insufficient_data"] as const) {
+      expect(calcScore(input({ ...base, foreignTrend: trend }))).toBe(0);
+    }
+    expect(calcScore(input({ ...base, foreignTrend: null }))).toBe(0);
+  });
+
+  // 規格與舊註解都寫「-7.5 ~ 7.5」，但那是照著一個本來就寫錯的舊上下限推的。
+  // 這個測試鎖住實際算術，讓下一個人不必再重算一次。
+  it("總分範圍為 -7 ~ 8", () => {
+    const best = calcScore(
+      input({
+        revenueYoY: 100,
+        maSignal: "above_both",
+        foreignNet20dShares: 9_000_000,
+        trustNet20dShares: 9_000_000,
+        foreignTrend: "accumulating",
+      }),
+    );
+    const worst = calcScore(
+      input({
+        revenueYoY: -50,
+        maSignal: "below_both",
+        foreignNet20dShares: -9_000_000,
+        trustNet20dShares: -9_000_000,
+        foreignTrend: "distributing",
+      }),
+    );
+    expect(best).toBe(8);
+    expect(worst).toBe(-7);
   });
 });
 
@@ -85,7 +141,7 @@ describe("bullAtrMultiple", () => {
 
 describe("calcEV 交易計畫", () => {
   it("價位順序必為 停損 < 進場 < 停利", () => {
-    const r = calcEV(input({ revenueYoY: 70, foreignNet30dShares: 3_000_000 }));
+    const r = calcEV(input({ revenueYoY: 70, foreignNet20dShares: 3_000_000 }));
     const entryMid = ((r.entryLow as number) + (r.entryHigh as number)) / 2;
     expect(r.stopLoss).toBeLessThan(entryMid);
     expect(entryMid).toBeLessThan(r.takeProfit as number);
@@ -163,7 +219,7 @@ describe("calcEV 交易計畫", () => {
 
   it("期望值訊號依門檻分級", () => {
     expect(calcEV(input({ atr: null })).evSignal).toBe("watch_positive"); // ev = 0
-    const strong = calcEV(input({ revenueYoY: 70, foreignNet30dShares: 3_000_000, atr: 20 }));
+    const strong = calcEV(input({ revenueYoY: 70, foreignNet20dShares: 3_000_000, atr: 20 }));
     expect(strong.ev).toBeGreaterThan(8);
     expect(strong.evSignal).toBe("strong_buy");
   });
@@ -315,7 +371,7 @@ describe("第一目標由後端計算", () => {
   it("停利落在 1R 以內時為 null（分批出場沒有意義）", () => {
     // 評分 -5 → 多頭倍數 1.5，小於停損的 2.0
     const r = calcEV(
-      input({ revenueYoY: -30, maSignal: "below_both", foreignNet30dShares: -3_000_000 }),
+      input({ revenueYoY: -30, maSignal: "below_both", foreignNet20dShares: -3_000_000 }),
     );
     expect(r.evScore).toBeLessThan(-2);
     expect(r.firstTarget).toBeNull();

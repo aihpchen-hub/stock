@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildChips,
+  consecutiveDays,
   judgeTrend,
   sumLastDays,
   toDailyNets,
@@ -159,6 +160,40 @@ describe("judgeTrend", () => {
     const s = seriesOf([...Array(15).fill(1000), ...Array(5).fill(3000)]);
     expect(judgeTrend(s, "foreign", null)).toBe("accumulating");
     expect(judgeTrend(seriesOf(Array(20).fill(0)), "foreign", null)).toBe("neutral");
+  });
+});
+
+describe("consecutiveDays", () => {
+  it("最近一日起連續買超的天數為正", () => {
+    expect(consecutiveDays(seriesOf([-100, -100, 50, 50, 50]), "foreign")).toBe(3);
+  });
+
+  it("連續賣超回傳負數", () => {
+    expect(consecutiveDays(seriesOf([100, -20, -20]), "foreign")).toBe(-2);
+  });
+
+  it("最近一日打平時回 0 —— 連續講的是到今天為止還在不在", () => {
+    expect(consecutiveDays(seriesOf([50, 50, 50, 0]), "foreign")).toBe(0);
+  });
+
+  it("中間插入打平的一天會中斷連續", () => {
+    expect(consecutiveDays(seriesOf([50, 50, 0, 50, 50]), "foreign")).toBe(2);
+  });
+
+  it("整段同向時等於資料長度", () => {
+    expect(consecutiveDays(seriesOf(Array(7).fill(30)), "foreign")).toBe(7);
+  });
+
+  it("空序列回 0，不丟例外", () => {
+    expect(consecutiveDays([], "foreign")).toBe(0);
+  });
+
+  it("與視窗累積互補：累積相同但持續性不同", () => {
+    const steady = seriesOf(Array(5).fill(100)); // 連 5 天各買 100
+    const oneShot = seriesOf([0, 0, 0, 0, 500]); // 只有最後一天買 500
+    expect(sumLastDays(steady, 5, "foreign")).toBe(sumLastDays(oneShot, 5, "foreign"));
+    expect(consecutiveDays(steady, "foreign")).toBe(5);
+    expect(consecutiveDays(oneShot, "foreign")).toBe(1);
   });
 });
 

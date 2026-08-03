@@ -102,3 +102,193 @@ export function calcTrailingStop(
   if (highWaterMark === null || atr === null || atr <= 0) return null;
   return Math.round((highWaterMark - TRAILING_ATR_MULTIPLE * atr * factor) * 100) / 100;
 }
+
+// ─── 指數移動平均與 MACD ────────────────────────────────────────────────────
+
+/**
+ * EMA 序列，以前 period 根的簡單平均為種子。
+ *
+ * 回傳整條序列而非只回最後一個值，因為 MACD 的 DEA 是「DIF 的 EMA」——
+ * 少了中間過程就算不出來。序列的第 0 項對應原始資料的第 period-1 項。
+ *
+ * EMA 是遞迴的，種子的影響會隨資料變長而衰減但永遠不會歸零，
+ * 因此餵進來的歷史越長越接近看盤軟體的數值。這也是抓取範圍
+ * 從 150 個日曆日拉到 240 的原因。
+ */
+export function emaSeries(values: number[], period: number): number[] | null {
+  if (period <= 0 || values.length < period) return null;
+
+  const k = 2 / (period + 1);
+  const seed = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  const out = [seed];
+
+  let ema = seed;
+  for (let i = period; i < values.length; i++) {
+    ema = values[i]! * k + ema * (1 - k);
+    out.push(ema);
+  }
+  return out;
+}
+
+/** 最後一個 EMA 值 */
+export function calcEMA(values: number[], period: number): number | null {
+  const series = emaSeries(values, period);
+  return series === null ? null : series[series.length - 1]!;
+}
+
+export type CrossKind = "golden" | "dead" | null;
+
+/**
+ * 交叉偵測。
+ *
+ * 只在最近 `within` 根之內發生交叉時才回報 —— 交叉是事件不是狀態。
+ * 若改成永遠回報「目前快線在慢線之上」，三個月前的黃金交叉今天仍會
+ * 被畫成新訊號，使用者無從分辨那是剛發生還是早就發生。
+ */
+export function detectCross(fast: number[], slow: number[], within = 3): CrossKind {
+  const n = Math.min(fast.length, slow.length);
+  if (n < 2) return null;
+
+  // 兩條線各自取尾端對齊，長度不同時以較短的為準
+  const f = fast.slice(fast.length - n);
+  const s = slow.slice(slow.length - n);
+
+  for (let i = n - 1; i >= Math.max(1, n - within); i--) {
+    const prevDiff = f[i - 1]! - s[i - 1]!;
+    const diff = f[i]! - s[i]!;
+    if (prevDiff <= 0 && diff > 0) return "golden";
+    if (prevDiff >= 0 && diff < 0) return "dead";
+  }
+  return null;
+}
+
+export interface Macd {
+  /** 快慢 EMA 之差 */
+  dif: number;
+  /** DIF 的 9 期 EMA（訊號線） */
+  dea: number;
+  /** 柱體 = DIF − DEA */
+  osc: number;
+  cross: CrossKind;
+}
+
+/**
+ * MACD。資料筆數不足以算出 DEA 時回傳 null，不用未收斂的值硬湊。
+ *
+ * 最少需要 slow + signal − 1 根（預設 34）才會有第一個 DEA 值。
+ */
+export function calcMACD(closes: number[], fast = 12, slow = 26, signal = 9): Macd | null {
+  const fastSeries = emaSeries(closes, fast);
+  const slowSeries = emaSeries(closes, slow);
+  if (fastSeries === null || slowSeries === null) return null;
+
+  // 兩條 EMA 的起點不同（第 fast-1 根 vs 第 slow-1 根），對齊到較晚的那個
+  const offset = fastSeries.length - slowSeries.length;
+  const dif = slowSeries.map((slowVal, i) => fastSeries[i + offset]! - slowVal);
+
+  const deaSeries = emaSeries(dif, signal);
+  if (deaSeries === null) return null;
+
+  const difTail = dif.slice(dif.length - deaSeries.length);
+  const lastDif = difTail[difTail.length - 1]!;
+  const lastDea = deaSeries[deaSeries.length - 1]!;
+
+  return {
+    dif: lastDif,
+    dea: lastDea,
+    osc: lastDif - lastDea,
+    cross: detectCross(difTail, deaSeries),
+  };
+}
+
+// ─── KD（隨機指標） ─────────────────────────────────────────────────────────
+
+export interface Kd {
+  k: number;
+  d: number;
+  cross: CrossKind;
+}
+
+/**
+ * KD 隨機指標，台股慣用的 9-3-3。
+ *
+ * K 與 D 皆以 50 為種子遞迴平滑，與國內看盤軟體一致。
+ * 最高最低相等（整段一價到底，如連續漲停）時 RSV 取 50 而非除以零。
+ */
+export function calcKD(rows: PriceRow[], period = 9, kPeriod = 3, dPeriod = 3): Kd | null {
+  const valid = rows.filter(
+    (r) => isFinite(r.close) && isFinite(r.max) && isFinite(r.min),
+  );
+  if (valid.length < period) return null;
+
+  const kSeries: number[] = [];
+  const dSeries: number[] = [];
+  let k = 50;
+  let d = 50;
+
+  for (let i = period - 1; i < valid.length; i++) {
+    const window = valid.slice(i - period + 1, i + 1);
+    const high = Math.max(...window.map((r) => r.max));
+    const low = Math.min(...window.map((r) => r.min));
+    const rsv = high === low ? 50 : ((valid[i]!.close - low) / (high - low)) * 100;
+
+    k = ((kPeriod - 1) / kPeriod) * k + (1 / kPeriod) * rsv;
+    d = ((dPeriod - 1) / dPeriod) * d + (1 / dPeriod) * k;
+    kSeries.push(k);
+    dSeries.push(d);
+  }
+
+  return { k, d, cross: detectCross(kSeries, dSeries) };
+}
+
+// ─── 均線斜率 ───────────────────────────────────────────────────────────────
+
+/**
+ * 均線斜率：均線在 lookback 根之內的變化百分比。
+ *
+ * 用百分比而非絕對值，否則 2000 元的股票與 20 元的股票無法用同一個門檻。
+ */
+export function calcMASlope(closes: number[], period: number, lookback = 5): number | null {
+  if (closes.length < period + lookback) return null;
+
+  const now = calcMA(closes, period);
+  const then = calcMA(closes.slice(0, closes.length - lookback), period);
+  if (now === null || then === null || then === 0) return null;
+
+  return ((now - then) / then) * 100;
+}
+
+// ─── 量能剖面 ───────────────────────────────────────────────────────────────
+
+export type VolumeKind = "surge" | "expanding" | "normal" | "shrinking";
+
+export interface VolumeProfile {
+  /** 最近一個交易日的成交量（股） */
+  latest: number;
+  avg5: number | null;
+  avg20: number;
+  /** 最新量 ÷ 20 日均量 */
+  ratio: number;
+  kind: VolumeKind;
+}
+
+/**
+ * 量能剖面。
+ *
+ * 只給 20 日均量無法回答「今天的量算不算異常」—— 那需要當日量與比值。
+ * 分級門檻是慣用值、未經回測，與三情境機率同屬經驗設定。
+ */
+export function calcVolumeProfile(rows: PriceRow[]): VolumeProfile | null {
+  const volumes = rows.map((r) => r.Trading_Volume).filter((v) => isFinite(v) && v > 0);
+  if (volumes.length === 0) return null;
+
+  const latest = volumes[volumes.length - 1]!;
+  const avg20 = calcAvgVolume(rows, 20);
+  if (avg20 === null || avg20 <= 0) return null;
+
+  const ratio = latest / avg20;
+  const kind: VolumeKind =
+    ratio >= 2 ? "surge" : ratio >= 1.3 ? "expanding" : ratio >= 0.7 ? "normal" : "shrinking";
+
+  return { latest, avg5: calcAvgVolume(rows, 5), avg20, ratio, kind };
+}

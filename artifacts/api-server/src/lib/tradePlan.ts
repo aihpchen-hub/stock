@@ -5,6 +5,7 @@
  * 所以畫面上不會出現兩組互相矛盾的數字。
  */
 
+import type { ChipTrend } from "./chips";
 import { roundToTick, tickSize } from "./ticks";
 
 /** 台股一張 = 1000 股 */
@@ -58,8 +59,18 @@ export interface EVInput {
   ma20: number | null;
   ma60: number | null;
   atr: number | null;
-  foreignNet30dShares: number;
-  trustNet30dShares: number;
+  /**
+   * 外資近 20 個交易日淨買超（股數）。資料不足 20 個交易日時為 null，
+   * 此時籌碼不計分 —— 用較短的天數硬湊會讓兩檔資料長度不同的股票
+   * 在同一張排名表上互比。
+   */
+  foreignNet20dShares: number | null;
+  trustNet20dShares: number | null;
+  /**
+   * 外資籌碼的力道趨勢。只取「近期比長期強還是弱」這一個維度，
+   * 與方向無關 —— 賣壓減輕與買盤加強同樣是流向轉好。
+   */
+  foreignTrend?: ChipTrend | null;
   /** 分析週期（1m/3m/6m）。未提供時以基準週期 3m 計算。 */
   period?: string | null;
 }
@@ -92,7 +103,45 @@ export interface EVOutput {
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** 營收動能 × 技術位置 × 法人籌碼，合計 -7 ~ 7 */
+/**
+ * 籌碼趨勢的修正分。
+ *
+ * 只看「近期力道相對於長期是變強還是變弱」，不看方向 ——
+ * 賣壓減輕（easing）與買盤加強（accumulating）在資金流向上是同一件事，
+ * 都代表壓力往買方傾斜；買盤退潮（slowing）與賣壓加強（distributing）同理。
+ * 這與規格中 `chipTrend(avg5, avg20)` 的語意一致，只是狀態拆得更細。
+ */
+function trendAdjustment(trend: ChipTrend | null | undefined): number {
+  switch (trend) {
+    case "accumulating":
+    case "easing":
+    case "reversing_up":
+      return 0.5;
+    case "slowing":
+    case "distributing":
+    case "reversing_down":
+      return -0.5;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * 營收動能 × 技術位置 × 法人籌碼 × 籌碼趨勢。
+ *
+ * 實際範圍為 **-7 ~ 8**（3+2+2+0.5+0.5 與 -2-2-2-0.5-0.5）。
+ * 舊註解寫「-7 ~ 7」，但改版前的真實範圍是 -6.5 ~ 7.5 —— 那個數字
+ * 從一開始就不對，規格裡的「-7.5 ~ 7.5」也是照著它推出來的。
+ * 這只影響文件：`scenarioProbabilities` 的分段門檻是 4／2／0／-2，
+ * 不依賴總分上下限。
+ *
+ * 籌碼基準由約 25 個交易日改為 20 個交易日，門檻按比例下調（約 2/3）——
+ * 較長的累積會被較久以前的資料稀釋，法人前 15 天大買、近 5 天調節時
+ * 累積數字仍是漂亮的正值，評分就跟著給了不該給的分數。
+ *
+ * `scenarioProbabilities` 的分段門檻（4／2／0／-2）**刻意維持不動**：
+ * 同時改動兩個未經驗證的參數，日後結果變化將無從歸因。
+ */
 export function calcScore(input: EVInput): number {
   let score = 0;
 
@@ -107,15 +156,22 @@ export function calcScore(input: EVInput): number {
   else if (input.maSignal === "above_ma20") score += 1;
   else if (input.maSignal === "below_both") score -= 2;
 
-  const foreignZhang = input.foreignNet30dShares / 1000;
-  if (foreignZhang > 2000) score += 2;
-  else if (foreignZhang > 0) score += 1;
-  else if (foreignZhang < -2000) score -= 2;
-  else if (foreignZhang < 0) score -= 1;
+  // 20 日基準的門檻＝原 30 日門檻的約 2/3
+  if (input.foreignNet20dShares !== null) {
+    const foreignZhang = input.foreignNet20dShares / 1000;
+    if (foreignZhang > 1300) score += 2;
+    else if (foreignZhang > 0) score += 1;
+    else if (foreignZhang < -1300) score -= 2;
+    else if (foreignZhang < 0) score -= 1;
+  }
 
-  const trustZhang = input.trustNet30dShares / 1000;
-  if (trustZhang > 500) score += 0.5;
-  else if (trustZhang < -500) score -= 0.5;
+  if (input.trustNet20dShares !== null) {
+    const trustZhang = input.trustNet20dShares / 1000;
+    if (trustZhang > 350) score += 0.5;
+    else if (trustZhang < -350) score -= 0.5;
+  }
+
+  score += trendAdjustment(input.foreignTrend);
 
   return score;
 }

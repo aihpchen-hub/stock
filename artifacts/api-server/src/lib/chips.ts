@@ -65,6 +65,8 @@ export interface ChipWindows {
 export interface InvestorChips {
   windows: ChipWindows;
   trend: ChipTrend;
+  /** 連續買賣超天數：正數為連買、負數為連賣、0 為最近一日打平或無資料 */
+  streak: number;
 }
 
 export interface Chips {
@@ -177,6 +179,28 @@ export function judgeTrend(
   return avg5 < avg20 ? "distributing" : "easing";
 }
 
+/**
+ * 連續買（賣）超天數，由最近一日往回數。
+ *
+ * 與視窗累積是互補的資訊：連續 8 天小買和「1 天大買、7 天觀望」的
+ * 5 日累積可能一樣，但前者代表持續性的建倉，後者只是一次性調節。
+ * 最近一日打平時回 0 —— 打平不延續任何一個方向，也不中斷後往前數，
+ * 因為「連續」講的就是到今天為止還在不在。
+ */
+export function consecutiveDays(series: DailyNet[], kind: InvestorKind): number {
+  const last = series[series.length - 1];
+  if (last === undefined || last[kind] === 0) return 0;
+
+  const sign = last[kind] > 0 ? 1 : -1;
+  let count = 0;
+  for (let i = series.length - 1; i >= 0; i--) {
+    const net = series[i]![kind];
+    if (net === 0 || Math.sign(net) !== sign) break;
+    count++;
+  }
+  return count * sign;
+}
+
 function chipsFor(
   series: DailyNet[],
   kind: InvestorKind,
@@ -190,6 +214,7 @@ function chipsFor(
       d20: sumLastDays(series, 20, kind),
     },
     trend: judgeTrend(series, kind, avgVolume20),
+    streak: consecutiveDays(series, kind),
   };
 }
 
