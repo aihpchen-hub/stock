@@ -30,30 +30,33 @@ export function AdviceBanner({
   if (!advice) return null;
 
   const price = currentPrice != null ? currentPrice.toString() : '—';
+  const low = entryLow != null ? entryLow.toString() : '—';
+  const high = entryHigh != null ? entryHigh.toString() : '—';
+  const stop = stopLoss != null ? stopLoss.toString() : '—';
 
   const view = {
     can_enter: {
       Icon: CheckCircle2,
       title: '可進場',
-      body: `現價 ${price} 落在建議區間 ${entryLow} ~ ${entryHigh} 之間`,
+      body: `現價 ${price} 落在建議區間 ${low} ~ ${high} 之間`,
       className: 'bg-primary/10 border-primary/40 text-primary',
     },
     wait_pullback: {
       Icon: Clock,
       title: '等待回檔買點',
-      body: `現價 ${price} 已離月線過遠，等回檔至 ${entryLow} ~ ${entryHigh} 再進場`,
+      body: `現價 ${price} 已離月線過遠，等回檔至 ${low} ~ ${high} 再進場`,
       className: 'bg-amber-500/10 border-amber-500/40 text-amber-500',
     },
     wait_breakout: {
       Icon: Clock,
       title: '等待突破買點',
-      body: `現價 ${price}，站回 ${entryLow} 之上這份計畫才成立`,
+      body: `現價 ${price}，站回 ${low} 之上這份計畫才成立`,
       className: 'bg-amber-500/10 border-amber-500/40 text-amber-500',
     },
     stop_breached: {
       Icon: XCircle,
       title: '已跌破停損，不建議進場',
-      body: `現價 ${price} 已低於停損 ${stopLoss}，原計畫的前提不成立`,
+      body: `現價 ${price} 已低於停損 ${stop}，原計畫的前提不成立`,
       className: 'bg-destructive/10 border-destructive/40 text-destructive',
     },
     insufficient_data: {
@@ -63,6 +66,11 @@ export function AdviceBanner({
       className: 'bg-muted border-border text-muted-foreground',
     },
   }[advice.action];
+
+  // 後端之後會新增狀態，而快照是從 localStorage 直接 JSON.parse 回來的，
+  // 沒有任何執行期驗證 —— 認不得的狀態就整塊不渲染，
+  // 不要讓一個沒見過的字串把整張頁面帶下去。
+  if (!view) return null;
 
   const { Icon, title, body, className } = view;
 
