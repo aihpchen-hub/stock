@@ -14,6 +14,9 @@
  * `api.test` 裡的點不合法，整個建置會直接失敗。
  * （本機的 `netlify build` 不會重現這個錯誤，只有正式建置才會。）
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import handler from "./functions/api.mts";
@@ -59,5 +62,37 @@ describe("Netlify 函式包裝層", () => {
       context,
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe("函式打包得出的依賴形狀", () => {
+  /**
+   * 函式的相依 workspace 套件必須匯出**編譯後的 JS**，不可直接匯出 .ts 原始碼。
+   *
+   * 實際發生過：`@workspace/advice` 的 exports 指向 `./src/index.ts` 時，
+   * Netlify 的打包器（ZISI + esbuild）會把**那個套件**當成函式的進入點打包，
+   * 產出的 api.mjs 只有 1 KB、內容是該套件的程式碼，既沒有 Express 也沒有
+   * default export。線上每一支 API 都因此回 502 `D.handler is not a function`
+   * —— 而 `pnpm test`、`pnpm run typecheck`、`pnpm run build`、甚至
+   * `netlify build` 全部都是綠的，因為壞掉的是 zip 裡的產物，不是原始碼。
+   *
+   * 這個測試守的是那個唯一的區別：exports 指向 dist 的 .js。
+   * 之所以用讀 package.json 而不是解壓 zip：後者要跑一次 netlify build（約 25 秒）
+   * 且需要 CLI，而根因就只是這一個欄位。
+   */
+  it("workspace 相依套件匯出編譯後的 JS，而非 .ts 原始碼", () => {
+    const pkgPath = fileURLToPath(new URL("../../../lib/advice/package.json", import.meta.url));
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      exports?: Record<string, { types?: string; default?: string } | string>;
+    };
+
+    const entry = pkg.exports?.["."];
+    expect(entry, "lib/advice 必須宣告 exports['.']").toBeDefined();
+    expect(typeof entry, "exports['.'] 必須是條件物件而非字串捷徑").toBe("object");
+
+    const { types, default: js } = entry as { types?: string; default?: string };
+    expect(js, "exports['.'].default 必須指向編譯後的 .js").toMatch(/^\.\/dist\/.*\.js$/);
+    expect(types, "exports['.'].types 必須指向產生的 .d.ts").toMatch(/^\.\/dist\/.*\.d\.ts$/);
+    expect(js).not.toMatch(/\.ts$/);
   });
 });

@@ -145,6 +145,16 @@ CI=true netlify build --offline --filter @workspace/web
 這些都是實際發生過、且錯誤訊息不會指向真正原因的問題：
 
 - **Netlify 函式不會把 node_modules 內聯進 bundle**，而是從函式檔位置往上追蹤 import 再放進 zip。函式因此必須放在 `artifacts/api-server/` 底下 —— 放根目錄時解析範圍是 root 的 package.json，express／pino／cors 都不在那裡，`netlify build` 完全成功但 zip 缺套件，部署後第一個請求才 `Cannot find package 'express'`。
+- **函式相依的 workspace 套件必須匯出編譯後的 JS，不能直接匯出 `.ts` 原始碼。** `lib/advice` 的 exports 一度指向 `./src/index.ts`，Netlify 的打包器就把**那個套件**當成函式的進入點，產出的 `api.mjs` 只有 1 KB、內容是該套件的程式碼，既沒有 Express 也沒有 default export；線上每支 API 都回 502 `D.handler is not a function`。**`pnpm test`、`typecheck`、`build`、連 `netlify build` 全都是綠的** —— 壞的是 zip 裡的產物，不是原始碼。`lib/api-zod` 與 `lib/api-client-react` 之所以能匯出 `.ts`，是因為它們只被 Vite 消費，從不進入函式的相依圖。守門測試在 `artifacts/api-server/netlify/api.test.ts`。
+  驗證方式（改動函式相依時務必做）：
+
+  ```bash
+  CI=true netlify build --offline --filter @workspace/web
+  unzip -p artifacts/web/.netlify/functions/api.zip \
+    artifacts/api-server/netlify/functions/api.mjs | grep -c "as default"
+  ```
+
+  必須是 `1`。只檢查「某段業務程式碼有沒有出現在 bundle 裡」是不夠的 —— 錯誤的 bundle 裡那段程式碼**正好在**，缺的是其他所有東西。
 - **SPA 收尾規則要放 `artifacts/web/public/_redirects`，不能放 `netlify.toml`。** 放 netlify.toml 時 `netlify dev` 會在代理給 Vite 之前就套用，把 `/src/main.tsx` 也改寫成 `/index.html`，前端整個載不起來 —— 畫面全白，而主控台錯誤看起來像 HTML 壞掉。
 - **函式打包成 CJS 時 `import.meta.url` 是 undefined。** 在模組載入時就呼叫 `fileURLToPath(import.meta.url)` 會讓函式冷啟動即崩潰，錯誤訊息只說「path 參數必須是字串」。
 - **函式必須經 `withLambda` 轉成 v2 default export。** 直接 `export const handler = serverless(app)` 會被判定成 v1 並打包成 CJS，輸出副檔名是 `.js`，一旦落在 `"type": "module"` 的目錄下就是 `module is not defined`。
