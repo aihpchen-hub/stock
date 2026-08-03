@@ -35,6 +35,23 @@ export function AdviceBanner({
   const high = entryHigh != null ? entryHigh.toString() : '—';
   const stop = stopLoss != null ? stopLoss.toString() : '—';
 
+  /**
+   * 距離進場區還有多少百分比。
+   *
+   * 少了它，「等待突破」把兩種完全不同的處境寫成同一句話：
+   * 差 0.15%（明天就可能觸發）與差 9.5%（要先漲一成）都只寫「站回 X 之上」。
+   * 投資人會用這個數字決定要不要繼續盯這檔。
+   */
+  const gapTo = (target: number | null | undefined): string => {
+    if (currentPrice == null || currentPrice <= 0 || target == null) return '';
+    const pct = ((target - currentPrice) / currentPrice) * 100;
+    if (!Number.isFinite(pct)) return '';
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+  };
+
+  const upGap = gapTo(entryLow);
+  const downGap = gapTo(entryHigh);
+
   const view = {
     can_enter: {
       Icon: CheckCircle2,
@@ -45,13 +62,17 @@ export function AdviceBanner({
     wait_pullback: {
       Icon: Clock,
       title: '等待回檔買點',
-      body: `現價 ${price} 已離月線過遠，等回檔至 ${low} ~ ${high} 再進場`,
+      body: `現價 ${price} 已離月線過遠，等回檔至 ${low} ~ ${high} 再進場${
+        downGap ? `（還需 ${downGap}）` : ''
+      }`,
       className: 'bg-amber-500/10 border-amber-500/40 text-amber-500',
     },
     wait_breakout: {
       Icon: Clock,
       title: '等待突破買點',
-      body: `現價 ${price}，站回 ${low} 之上這份計畫才成立`,
+      body: `現價 ${price}，站回 ${low} 之上這份計畫才成立${
+        upGap ? `（還需 ${upGap}）` : ''
+      }`,
       className: 'bg-amber-500/10 border-amber-500/40 text-amber-500',
     },
     stop_breached: {

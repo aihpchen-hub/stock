@@ -110,9 +110,17 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
       <div className="p-5 border-b border-border bg-muted/20">
         <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center flex-wrap gap-2 mb-1">
               <h3 className="text-xl font-bold text-foreground">{stock.name}</h3>
               <span className="text-lg text-muted-foreground font-mono">{stock.code}</span>
+              {/* 現價要能一眼看到。先前它只出現在操作建議的句子裡，
+                  想知道「現在多少錢」得先讀完一句話。 */}
+              {currentPrice != null && (
+                <span className="flex items-baseline gap-1">
+                  <span className="text-xl font-bold font-mono text-foreground">{currentPrice}</span>
+                  <span className="text-xs text-muted-foreground">收盤</span>
+                </span>
+              )}
               <span className="px-2 py-0.5 bg-accent/20 text-accent text-xs font-medium rounded border border-accent/20">
                 {stock.sector}
               </span>
@@ -256,6 +264,38 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                 {position.lots > 0 && position.limitedBy === 'capital' && (
                   <div className="text-xs text-amber-500/80 bg-amber-500/10 p-2 rounded">
                     ⚠️ 已達資金上限比例，限制投入張數
+                  </div>
+                )}
+                {/* 0 張最需要解釋，先前卻是唯一不解釋的情況 —— 上面兩個提示都被
+                    lots > 0 擋掉，使用者只看到「0 張／NT$ 0」，不知道是系統壞了、
+                    標的不好、還是自己的設定買不起。這裡把 limitedBy 換成具體門檻。 */}
+                {position.lots === 0 && (
+                  <div className="text-xs text-amber-500/90 bg-amber-500/10 p-2 rounded space-y-1">
+                    {position.limitedBy === 'risk' ? (
+                      <>
+                        <div>
+                          ⚠️ 買不到 1 張：這檔每張最大虧損 NT${' '}
+                          {Math.round(economics.netRiskPerLot).toLocaleString()}，超過你設定的單筆風險上限 NT${' '}
+                          {settings.riskBudget.toLocaleString()}。
+                        </div>
+                        <div className="text-muted-foreground">
+                          要買 1 張，單筆風險上限需提高到 NT${' '}
+                          {Math.ceil(economics.netRiskPerLot).toLocaleString()} 以上；或改用較短的分析週期（停損較近）。
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          ⚠️ 買不到 1 張：1 張成本 NT${' '}
+                          {Math.round(position.costPerLot).toLocaleString()}，超過單檔可投入上限 NT${' '}
+                          {Math.round(position.capitalCap).toLocaleString()}
+                          （資金 {settings.capital.toLocaleString()} × {Math.round(settings.maxPositionPct * 100)}%）。
+                        </div>
+                        <div className="text-muted-foreground">
+                          台股一張 1000 股，本工具尚未支援零股。
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

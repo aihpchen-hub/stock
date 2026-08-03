@@ -8,6 +8,7 @@ import {
   StockDetailResult,
   AnalyzeRequestPeriod
 } from '@workspace/api-client-react';
+import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
 import { useSettings } from '@/hooks/use-settings';
 import { StockCard } from '@/components/stock-card';
@@ -200,6 +201,7 @@ export default function Analysis() {
                     <tr>
                       <th className="px-4 py-3 font-medium">代號</th>
                       <th className="px-4 py-3 font-medium">公司</th>
+                      <th className="px-4 py-3 font-medium text-right">現價</th>
                       <th className="px-4 py-3 font-medium text-right">E(V)</th>
                       <th className="px-4 py-3 font-medium text-center">訊號</th>
                     </tr>
@@ -208,18 +210,38 @@ export default function Analysis() {
                     {sortedStocks.map(stock => {
                       const d = derivedStockDetails[stock.code];
                       if (!d || d.ev == null) return null;
+                      // 與個股卡片用同一套判斷：舊快照沒有 advice 欄位，用存下的價位重算。
+                      // 少了這一步，這張表會寫「強烈買進」而下方同一檔的卡片寫
+                      // 「已跌破停損，不建議進場」—— 正是本階段要消除的那類矛盾。
+                      const advice =
+                        d.advice ??
+                        deriveAdvice({
+                          currentPrice: d.currentPrice ?? null,
+                          entryLow: d.entryLow ?? null,
+                          entryHigh: d.entryHigh ?? null,
+                          stopLoss: d.stopLoss ?? null,
+                        });
                       return (
                         <tr key={stock.code} className="hover:bg-muted/30 transition-colors">
                           <td className="px-4 py-3 font-mono text-muted-foreground">{stock.code}</td>
                           <td className="px-4 py-3 font-bold">{stock.name}</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {d.currentPrice ?? '—'}
+                          </td>
                           <td className={`px-4 py-3 text-right font-mono font-medium ${d.ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
                             {d.ev > 0 ? '+' : ''}{d.ev.toFixed(2)}%
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {d.evSignal && (
-                              <span className="text-xs bg-muted px-2 py-1 rounded text-foreground border border-border">
-                                {formatSignalLabel(d.evSignal)}
+                            {advice.planKind === 'none' ? (
+                              <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded border border-destructive/30">
+                                不建議進場
                               </span>
+                            ) : (
+                              d.evSignal && (
+                                <span className="text-xs bg-muted px-2 py-1 rounded text-foreground border border-border">
+                                  {formatSignalLabel(d.evSignal)}
+                                </span>
+                              )
                             )}
                           </td>
                         </tr>
