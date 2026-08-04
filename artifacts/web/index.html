@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <!-- 不設 maximum-scale：那會連使用者主動的雙指縮放一起擋掉。
+         它原本是用來防止 iOS 聚焦輸入框時自動放大，但那個行為的觸發條件是
+         欄位字級小於 16px —— 本站的輸入框都在 16px 以上，不需要這個 hack。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>台股產業分析</title>
     <meta name="description" content="台股產業分析 — built on Replit. Update this description to reflect the app." />
     <meta name="robots" content="index, follow" />

@@ -6,6 +6,13 @@ import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
 import { AnalyzeRequestPeriod, useVerifyOutcomes, VerifyOutcomesResult } from '@workspace/api-client-react';
 import { buildVerifyGroups, isRipe } from '@/lib/verify';
+import { NumberField } from '@/components/number-field';
+import {
+  MAX_ALLOWED_POSITION_PCT,
+  MAX_FEE_DISCOUNT,
+  MIN_FEE_DISCOUNT,
+  MIN_POSITION_PCT,
+} from '@/lib/settings';
 
 const CHIPS = [
   'AI水冷散熱', '矽光子', 'CoWoS封裝', 'HBM記憶體', '伺服器供應鏈', 'AI PC', '散熱模組', '電源管理IC'
@@ -154,44 +161,40 @@ export default function Home() {
           
           {!settingsLoading && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground block">可動用資金 (NT$)</label>
-                <input
-                  type="number"
-                  className="w-full bg-background border border-input rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                  value={settings.capital}
-                  onChange={(e) => updateSettings({ capital: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground block">單筆最大虧損 (NT$)</label>
-                <input
-                  type="number"
-                  className="w-full bg-background border border-input rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                  value={settings.riskBudget}
-                  onChange={(e) => updateSettings({ riskBudget: Number(e.target.value) })}
-                />
-              </div>
+              {/* 四個欄位都改成離開時才提交。先前是每按一次鍵就寫進
+                  localStorage 再讀回來，而儲存函式對非正數靜默拒絕 ——
+                  退格到剩一位數時舊值立刻被寫回，最後一位刪不掉。 */}
+              <NumberField
+                label="可動用資金 (NT$)"
+                value={settings.capital}
+                onCommit={(capital) => updateSettings({ capital })}
+                min={1}
+                integer
+              />
+              <NumberField
+                label="單筆最大虧損 (NT$)"
+                value={settings.riskBudget}
+                onCommit={(riskBudget) => updateSettings({ riskBudget })}
+                min={1}
+                integer
+              />
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground block">單檔上限 (%)</label>
-                  <input
-                    type="number"
-                    className="w-full bg-background border border-input rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                    value={settings.maxPositionPct * 100}
-                    onChange={(e) => updateSettings({ maxPositionPct: Number(e.target.value) / 100 })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm text-muted-foreground block">手續費折扣 (折)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    className="w-full bg-background border border-input rounded-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
-                    value={settings.feeDiscount * 10}
-                    onChange={(e) => updateSettings({ feeDiscount: Number(e.target.value) / 10 })}
-                  />
-                </div>
+                <NumberField
+                  label="單檔上限 (%)"
+                  hint="1~100"
+                  value={settings.maxPositionPct * 100}
+                  onCommit={(pct) => updateSettings({ maxPositionPct: pct / 100 })}
+                  min={MIN_POSITION_PCT * 100}
+                  max={MAX_ALLOWED_POSITION_PCT * 100}
+                />
+                <NumberField
+                  label="手續費折扣 (折)"
+                  hint="1~10"
+                  value={settings.feeDiscount * 10}
+                  onCommit={(tenths) => updateSettings({ feeDiscount: tenths / 10 })}
+                  min={MIN_FEE_DISCOUNT * 10}
+                  max={MAX_FEE_DISCOUNT * 10}
+                />
               </div>
             </div>
           )}
