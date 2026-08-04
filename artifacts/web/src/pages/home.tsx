@@ -4,8 +4,9 @@ import { Search, History, Settings, CheckCircle2, ChevronDown, ChevronRight, X, 
 import { useSettings } from '@/hooks/use-settings';
 import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
-import { AnalyzeRequestPeriod, useVerifyOutcomes, VerifyOutcomesResult } from '@workspace/api-client-react';
+import { AnalyzeRequestPeriod, useVerifyOutcomes } from '@workspace/api-client-react';
 import { buildVerifyGroups, isRipe, OUTCOME_LABEL } from '@/lib/verify';
+import { loadVerify, saveVerify, type StoredVerify } from '@/lib/verifyStore';
 import { NumberField } from '@/components/number-field';
 import {
   MAX_ALLOWED_POSITION_PCT,
@@ -32,8 +33,12 @@ export default function Home() {
   const { history, removeHistory, clearHistory } = useHistory();
   const verifyOutcomes = useVerifyOutcomes();
 
-  type VerifySummary = { ruleVersion: number; tally: VerifyOutcomesResult['tally'] };
-  const [verifyResults, setVerifyResults] = useState<VerifySummary[] | null>(null);
+  // 初始值直接從 localStorage 讀 —— 先前存在 useState 裡，離開頁面就消失，
+  // 使用者每次回到首頁都要重按一次「對答案」，而這個功能的價值來自累積。
+  const [verifyResults, setVerifyResults] = useState<StoredVerify[] | null>(() => {
+    const stored = loadVerify();
+    return stored.length > 0 ? stored : null;
+  });
 
   const handleSearch = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -45,17 +50,20 @@ export default function Home() {
     try {
       const groups = await buildVerifyGroups(history);
       if (groups.length === 0) {
-        alert('目前沒有足夠時間（> 5天）的歷史紀錄可供驗證。');
+        // 門檻隨週期而異（1m 七日、3m 十四日、6m 廿一日），因此不寫死一個天數
+        alert('目前沒有夠舊的歷史紀錄可供驗證。計畫要走過一段時間才對得出結論。');
         return;
       }
       // 逐版本各打一次 —— 後端一次最多收 40 筆，而不同規則算出來的計畫
       // 合併統計會得到一個量不到任何東西的達標率
-      const summaries = await Promise.all(
+      const summaries: StoredVerify[] = await Promise.all(
         groups.map(async (g) => ({
           ruleVersion: g.ruleVersion,
           tally: (await verifyOutcomes.mutateAsync({ data: { items: g.items } })).tally,
+          verifiedAt: Date.now(),
         })),
       );
+      saveVerify(summaries);
       setVerifyResults(summaries);
     } catch (err) {
       console.error(err);
@@ -66,7 +74,7 @@ export default function Home() {
   /**
    * 有沒有「夠舊到值得驗證」的紀錄。
    *
-   * 前瞻驗證只看得懂存超過七個日曆日的計畫 —— 更新的紀錄還沒走完足夠的交易日，
+   * 前瞻驗證只看得懂夠舊的計畫（門檻隨週期而異）—— 更新的紀錄還沒走完足夠的交易日，
    * 幾乎必然是「仍持有」，對不出任何結論。先前這個區塊只要有任何紀錄就顯示，
    * 於是剛開始用的人只會看到一個按下去回「沒有足夠時間的歷史紀錄」的按鈕。
    * 改成沒有可驗證的紀錄時整塊不渲染，紀錄養夠了它才會帶著真實數據出現。
@@ -221,7 +229,7 @@ export default function Home() {
               {verifyOutcomes.isPending ? '驗證中...' : '對答案'}
             </button>
 
-            {verifyResults?.map(({ ruleVersion, tally }) => (
+            {verifyResults?.map(({ ruleVersion, tally, verifiedAt }) => (
               <div
                 key={ruleVersion}
                 className="mt-6 space-y-4 p-4 bg-background rounded-xl border border-border"
@@ -278,6 +286,12 @@ export default function Home() {
                     <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['ambiguous']}</div>
                   </div>
                 </div>
+
+                {/* 結果現在會留著，因此必須標明它是什麼時候跑的 ——
+                    否則使用者會把三週前的統計當成現在的命中率。 */}
+                <p className="text-[11px] text-muted-foreground">
+                  驗證於 {new Date(verifiedAt).toLocaleString('zh-TW')} —— 這是當時的結果，不是即時值
+                </p>
               </div>
             ))}
           </section>
