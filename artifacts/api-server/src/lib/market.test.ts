@@ -9,7 +9,6 @@ function rows(n: number, start = 100, step = 1): PriceRow[] {
     const close = start + i * step;
     return {
       date: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
-      open: close,
       max: close,
       min: close,
       close,
