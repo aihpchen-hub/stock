@@ -101,6 +101,23 @@ describe('各受眾的關鍵排除', () => {
     expect(shows('dividend', 'dividend')).toBe(true);
   });
 
+  it('價值與存股看不到價位地圖 —— 它畫的就是停損停利，與上一條同一個理由', () => {
+    expect(shows('value', 'price_map')).toBe(false);
+    expect(shows('dividend', 'price_map')).toBe(false);
+  });
+
+  it('有交易計畫的三個視圖都看得到價位地圖', () => {
+    for (const p of ['newbie', 'momentum', 'swing'] as const) {
+      expect(shows(p, 'price_map')).toBe(true);
+    }
+  });
+
+  it('看得到價位地圖的視圖必定也看得到交易計畫 —— 地圖畫的就是那組價位', () => {
+    for (const p of PROFILES) {
+      if (shows(p, 'price_map')) expect(shows(p, 'trading_plan')).toBe(true);
+    }
+  });
+
   it('相對強弱在每個視圖都看得到 —— 沒有基準的趨勢對誰都可能講反', () => {
     for (const p of PROFILES) {
       expect(shows(p, 'market_strength')).toBe(true);

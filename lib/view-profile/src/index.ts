@@ -38,6 +38,8 @@ export type SectionKey =
   | 'narrative'
   /** 進場區、停損、停利 */
   | 'trading_plan'
+  /** 把交易計畫的價位、均線與近 20 日高低畫在同一根真實比例的軸上 */
+  | 'price_map'
   /** 建議張數、風報比、單張最大虧損 */
   | 'position_sizing'
   /** 第一目標 1R 與移動停損起始 */
@@ -83,6 +85,7 @@ export const VIEW_CONFIG: Record<ViewProfile, ViewConfig> = {
       'narrative',
       'market_strength',
       'volume',
+      'price_map',
       'trading_plan',
       'position_sizing',
       'invalidation',
@@ -101,6 +104,7 @@ export const VIEW_CONFIG: Record<ViewProfile, ViewConfig> = {
       'chips',
       'signals',
       'signal_details',
+      'price_map',
       'trading_plan',
       'position_sizing',
       'invalidation',
@@ -122,6 +126,7 @@ export const VIEW_CONFIG: Record<ViewProfile, ViewConfig> = {
       'signals',
       'signal_details',
       'narrative',
+      'price_map',
       'trading_plan',
       'position_sizing',
       'trailing_stop',

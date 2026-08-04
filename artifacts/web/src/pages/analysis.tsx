@@ -12,6 +12,7 @@ import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
 import { latestFor, loadVerify } from '@/lib/verifyStore';
 import { rankByStrength } from '@/lib/groupStrength';
+import { queriedCode } from '@/lib/queriedStock';
 import { ProfileSwitcher } from '@/components/profile-switcher';
 import { DEFAULT_PROFILE, VIEW_CONFIG, type ViewProfile } from '@workspace/view-profile';
 
@@ -141,6 +142,40 @@ export default function Analysis() {
     });
   }, [analysis, derivedStockDetails]);
 
+  // 使用者查的是哪一檔。查產業關鍵字時為 null —— 那種查詢不指向特定標的
+  const queried = useMemo(
+    () => (analysis ? queriedCode(analysis.keyword, analysis.stocks) : null),
+    [analysis],
+  );
+
+  // 卡片順序：查的那檔排第一，其餘維持期望值由高到低。
+  // 後端的 prompt 早就要求模型把查詢標的放在第一筆，是上面那次重排把它沖走的 ——
+  // 查 5439 卻要滑到第四張卡片才找得到自己查的股票。
+  const cardStocks = useMemo(() => {
+    if (!queried) return sortedStocks;
+    const target = sortedStocks.find((s) => s.code === queried);
+    if (!target) return sortedStocks;
+    return [target, ...sortedStocks.filter((s) => s.code !== queried)];
+  }, [sortedStocks, queried]);
+
+  // 卡片順序與 queries 的順序不同 —— queries 是照 analysis.stocks 建的。
+  // 先前用卡片迴圈的 index 去讀 queries，每張卡片拿到的是別檔的載入狀態。
+  const queryIndexOf = useMemo(() => {
+    const map = new Map<string, number>();
+    analysis?.stocks.forEach((s, i) => map.set(s.code, i));
+    return map;
+  }, [analysis]);
+
+  // 排名表印得出來的列。ev 為 null 的列本來就不渲染，名次的分母必須是這個長度，
+  // 否則會出現「第 3/5」而畫面上只有三列。
+  const rankedRows = useMemo(
+    () =>
+      sortedStocks
+        .map((stock) => ({ stock, detail: derivedStockDetails[stock.code] }))
+        .filter((row) => row.detail?.ev != null),
+    [sortedStocks, derivedStockDetails],
+  );
+
   const isAnalyzing = !snapshotId && (!analysis || queries.some(q => q.isPending));
 
   if (settingsLoading) return null;
@@ -250,8 +285,7 @@ export default function Analysis() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {sortedStocks.map(stock => {
-                      const d = derivedStockDetails[stock.code];
+                    {rankedRows.map(({ stock, detail: d }, i) => {
                       if (!d || d.ev == null) return null;
                       // 與個股卡片用同一套判斷：舊快照沒有 advice 欄位，用存下的價位重算。
                       // 少了這一步，這張表會寫「強烈買進」而下方同一檔的卡片寫
@@ -264,10 +298,28 @@ export default function Analysis() {
                           entryHigh: d.entryHigh ?? null,
                           stopLoss: d.stopLoss ?? null,
                         });
+                      // 這張表就是排名，把查詢標的拉到第一列會讓「第一列」不再代表
+                      // 期望值最高。改成原地標記，並直接寫出它排第幾。
+                      const isQueried = stock.code === queried;
                       return (
-                        <tr key={stock.code} className="hover:bg-muted/30 transition-colors">
+                        <tr
+                          key={stock.code}
+                          className={`hover:bg-muted/30 transition-colors ${
+                            isQueried ? 'bg-primary/5 border-l-2 border-l-primary' : ''
+                          }`}
+                        >
                           <td className="px-4 py-3 font-mono text-muted-foreground">{stock.code}</td>
-                          <td className="px-4 py-3 font-bold">{stock.name}</td>
+                          <td className="px-4 py-3 font-bold">
+                            <span className="flex items-center gap-2 flex-wrap">
+                              {stock.name}
+                              {isQueried && (
+                                <span className="text-[11px] font-medium bg-primary/15 text-primary px-1.5 py-0.5 rounded border border-primary/30">
+                                  你查的
+                                  {rankedRows.length >= 2 && ` · 第 ${i + 1}/${rankedRows.length}`}
+                                </span>
+                              )}
+                            </span>
+                          </td>
                           <td className="px-4 py-3 text-right font-mono">
                             {d.currentPrice ?? '—'}
                           </td>
@@ -303,9 +355,10 @@ export default function Analysis() {
               <ProfileSwitcher profile={profile} onChange={changeProfile} />
             </div>
             <div className="grid gap-6">
-              {sortedStocks.map((stock, i) => {
+              {cardStocks.map((stock) => {
                 const detail = derivedStockDetails[stock.code];
-                const isLoading = !isRestoring && (!queries[i] || queries[i].isPending);
+                const query = queries[queryIndexOf.get(stock.code) ?? -1];
+                const isLoading = !isRestoring && (!query || query.isPending);
                 return (
                   <StockCard
                     key={stock.code}
@@ -320,6 +373,7 @@ export default function Analysis() {
                     }
                     groupRank={groupRanks[stock.code] ?? null}
                     profile={profile}
+                    isQueried={stock.code === queried}
                   />
                 );
               })}

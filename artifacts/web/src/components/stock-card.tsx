@@ -11,6 +11,7 @@ import { DataFreshness } from '@/components/data-freshness';
 import { strategyFor } from '@/lib/strategy';
 import type { StoredVerify } from '@/lib/verifyStore';
 import { MarketPanel } from '@/components/stock/market-panel';
+import { PriceMap } from '@/components/stock/price-map';
 import type { GroupRank } from '@/lib/groupStrength';
 import {
   DividendPanel,
@@ -30,6 +31,8 @@ interface StockCardProps {
   groupRank?: GroupRank | null;
   /** 受眾視圖。決定顯示哪些區塊，不改變任何數字 */
   profile?: ViewProfile;
+  /** 這檔就是使用者查的那一檔。查產業關鍵字時每張卡片都是 false */
+  isQueried?: boolean;
 }
 
 export function StockCard({
@@ -40,6 +43,7 @@ export function StockCard({
   verified,
   groupRank,
   profile,
+  isQueried,
 }: StockCardProps) {
   const view = viewFor(profile);
   const shows = (section: Parameters<typeof view.show.includes>[0]) =>
@@ -74,6 +78,8 @@ export function StockCard({
     rewardPerLot,
     trailingStop,
     maSignal,
+    ma20,
+    ma60,
     revenueYoY,
     foreignNet30d,
     trustNet30d,
@@ -93,6 +99,7 @@ export function StockCard({
     stopBasis,
     narrative,
     swingLow,
+    swingHigh,
     returns,
     relativeStrength,
     market,
@@ -172,21 +179,32 @@ export function StockCard({
       <div className="p-5 border-b border-border bg-muted/20">
         <div className="flex items-start justify-between">
           <div>
-            <div className="flex items-center flex-wrap gap-2 mb-1">
+            {/* 身分一行、價格一行。先前五個元素擠在同一行，代號與價格兩串
+                裸數字直接相鄰（「台燿 6274 1340 收盤」），讀的人得自己猜
+                哪一串是代號、哪一串是錢。 */}
+            <div className="flex items-center flex-wrap gap-2">
               <h3 className="text-xl font-bold text-foreground">{stock.name}</h3>
-              <span className="text-lg text-muted-foreground font-mono">{stock.code}</span>
-              {/* 現價要能一眼看到。先前它只出現在操作建議的句子裡，
-                  想知道「現在多少錢」得先讀完一句話。 */}
-              {currentPrice != null && (
-                <span className="flex items-baseline gap-1">
-                  <span className="text-xl font-bold font-mono text-foreground">{currentPrice}</span>
-                  <span className="text-xs text-muted-foreground">收盤</span>
-                </span>
-              )}
+              <span className="px-1.5 py-0.5 font-mono text-sm text-muted-foreground bg-background rounded border border-border">
+                {stock.code}
+              </span>
               <span className="px-2 py-0.5 bg-accent/20 text-accent text-xs font-medium rounded border border-accent/20">
                 {stock.sector}
               </span>
+              {/* 查個股時這張卡片會被排到第一，徽章說明它為什麼在那裡 */}
+              {isQueried && (
+                <span className="px-2 py-0.5 bg-primary/15 text-primary text-xs font-bold rounded border border-primary/30">
+                  你查的
+                </span>
+              )}
             </div>
+            {/* 現價要能一眼看到。先前它只出現在操作建議的句子裡，
+                想知道「現在多少錢」得先讀完一句話。 */}
+            {currentPrice != null && (
+              <div className="flex items-baseline gap-1.5 mt-1 mb-1">
+                <span className="text-xs text-muted-foreground">收盤價</span>
+                <span className="text-2xl font-bold font-mono text-foreground">{currentPrice}</span>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">{stock.reason}</p>
             <div className="mt-2 space-y-1">
               <span className="inline-block px-2 py-0.5 bg-muted text-muted-foreground text-xs rounded border border-border">
@@ -259,6 +277,26 @@ export function StockCard({
               <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
               <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
             </div>
+          )}
+
+          {/* 動能與新手視圖的左欄原本整片空白 —— 那兩個視圖不看 E(V)、
+              不看三情境、也不看估值，於是這一欄什麼都沒有而右欄是滿的。
+              價位地圖填的是這個洞，同時回答單看數字答不出來的事：
+              進場區壓在月線之上還是之下、現價離停損還有多遠。 */}
+          {shows('price_map') && (
+            <PriceMap
+              planKind={effectiveAdvice.planKind}
+              currentPrice={currentPrice}
+              entryLow={entryLow}
+              entryHigh={entryHigh}
+              stopLoss={stopLoss}
+              takeProfit={takeProfit}
+              firstTarget={firstTarget}
+              ma20={ma20}
+              ma60={ma60}
+              swingHigh={swingHigh}
+              swingLow={swingLow}
+            />
           )}
 
           {/* 估值三塊只有價值與存股視圖看得到。財報走延後載入 ——
