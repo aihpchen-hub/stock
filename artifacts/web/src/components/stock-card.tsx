@@ -111,6 +111,14 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
     discount: settings.feeDiscount,
   }) : null;
 
+  // 實際到手的賠率。後端的 riskRewardRatio 是毛值、用價差算的，而下單要付
+  // 兩趟手續費與一趟證交稅 —— 畫面只印毛值等於系統性地把每一筆交易
+  // 講得比實際好。停損距離為 0（缺價位）時不給比值，不輸出 Infinity。
+  const netRiskReward =
+    economics && economics.netRiskPerLot > 0
+      ? economics.netRewardPerLot / economics.netRiskPerLot
+      : null;
+
   const signalColors = {
     strong_buy: 'bg-primary/20 text-primary border-primary/50',
     buy: 'bg-primary/10 text-primary border-primary/30',
@@ -338,36 +346,44 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                     先前只印毛值，等於系統性地把每一筆交易講得比實際好。
                     低價股尤其明顯：手續費有 20 元低收，價差被固定成本吃掉的
                     比例遠高於高價股。 */}
-                {(() => {
-                  if (economics.netRiskPerLot <= 0) return null;
-                  const netRR = economics.netRewardPerLot / economics.netRiskPerLot;
-                  if (!Number.isFinite(netRR)) return null;
-                  return (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        扣費後風報比:{' '}
-                        <strong className={netRR < 1 ? 'text-destructive' : 'text-foreground'}>
-                          {netRR.toFixed(2)}
-                        </strong>
-                      </span>
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        單張淨獲利:{' '}
-                        <strong className="text-primary font-mono">
-                          NT$ {economics.netRewardPerLot.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                        </strong>
-                      </span>
-                    </div>
-                  );
-                })()}
+                {netRiskReward != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      扣費後風報比:{' '}
+                      <strong className={netRiskReward < 1 ? 'text-destructive' : 'text-foreground'}>
+                        {netRiskReward.toFixed(2)}
+                      </strong>
+                    </span>
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      單張淨獲利:{' '}
+                      <strong className="text-primary font-mono">
+                        NT$ {economics.netRewardPerLot.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
-                {/* 風報比低於 1 代表停利距離比停損距離還短 —— 就算看對方向，
-                    賺的也比看錯時賠的少。這與「現在能不能進場」是兩回事：
-                    價位可能完全允許進場，但這筆交易的賠率本身就不划算。
-                    先前畫面只印出數字，從不說它代表什麼。 */}
-                {riskRewardRatio != null && riskRewardRatio < 1 && (
+                {/* 賠率警示以**扣費後**的比值為準，不是毛值。
+                    成本兩邊都打：它減少獲利、同時放大虧損，而風報比是個比值，
+                    分子分母會同時往壞的方向走。實測十檔有四檔因此從
+                    「賠率有利」翻成「不利」—— 台積電毛 1.20、淨 0.96。
+                    先前警示只看毛值，這四檔正好落在縫裡：畫面把淨值標紅，
+                    卻沒有一個字說明發生了什麼事，而那恰恰是最需要說明的一種。 */}
+                {netRiskReward != null && netRiskReward < 1 && (
                   <div className="text-xs text-destructive/90 bg-destructive/10 p-2 rounded">
-                    ⚠️ 風報比低於 1：停利距離比停損距離短，即使方向看對，獲利也小於看錯時的虧損。
-                    這筆交易的賠率不利，與現在能否進場無關。
+                    {riskRewardRatio != null && riskRewardRatio >= 1 ? (
+                      <>
+                        ⚠️ 賠率被交易成本翻面：帳面風報比 {riskRewardRatio.toFixed(2)} 看似有利，
+                        但扣掉兩趟手續費與證交稅後只剩 {netRiskReward.toFixed(2)}。
+                        成本同時吃掉獲利並放大虧損，所以淨值掉得比想像中多。
+                        證交稅 0.3% 不能打折，談券商折扣救不回來。
+                      </>
+                    ) : (
+                      <>
+                        ⚠️ 風報比低於 1：停利距離比停損距離短，即使方向看對，獲利也小於看錯時的虧損
+                        （扣費後為 {netRiskReward.toFixed(2)}）。這筆交易的賠率不利，與現在能否進場無關。
+                      </>
+                    )}
                   </div>
                 )}
 
