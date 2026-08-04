@@ -105,3 +105,75 @@ describe("buildFinancials", () => {
     expect(f.asOf).toBeNull();
   });
 });
+
+describe("現金流量表的累計還原", () => {
+  /** 損益表提供季別骨架；金額不影響本組測試 */
+  const skeleton = (dates: string[]) => dates.map((d) => row(d, "Revenue", 1000));
+
+  /** 累計的營運現金流與資本支出（資本支出為負，與 FinMind 一致） */
+  const cumulative = (entries: Array<[string, number, number]>) =>
+    entries.flatMap(([date, op, capex]) => [
+      row(date, "NetCashInflowFromOperatingActivities", op),
+      row(date, "PropertyAndPlantAndEquipment", capex),
+    ]);
+
+  it("第一季就是單季，直接採用", () => {
+    const f = buildFinancials(
+      skeleton(["2024-03-31"]),
+      [],
+      cumulative([["2024-03-31", 4363, -1813]]),
+    );
+    expect(f.quarters[0]!.fcf).toBe(4363 - 1813);
+  });
+
+  it("第二季之後要減掉同年前一季 —— 不減就會把全年數當成單季", () => {
+    // 2330 的真實形狀：現金流是累計，Q4 的數字是全年
+    const f = buildFinancials(
+      skeleton(["2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31"]),
+      [],
+      cumulative([
+        ["2024-03-31", 4363, -1813],
+        ["2024-06-30", 8140, -3870],
+        ["2024-09-30", 12060, -5941],
+        ["2024-12-31", 18262, -9560],
+      ]),
+    );
+    const byDate = Object.fromEntries(f.quarters.map((q) => [q.date, q.fcf]));
+    expect(byDate["2024-03-31"]).toBe(4363 - 1813);
+    expect(byDate["2024-06-30"]).toBe(8140 - 4363 - (3870 - 1813));
+    expect(byDate["2024-09-30"]).toBe(12060 - 8140 - (5941 - 3870));
+    expect(byDate["2024-12-31"]).toBe(18262 - 12060 - (9560 - 5941));
+  });
+
+  it("跨年時重新起算 —— 隔年第一季不減去前一年第四季", () => {
+    const f = buildFinancials(
+      skeleton(["2024-12-31", "2025-03-31"]),
+      [],
+      cumulative([
+        ["2024-12-31", 18262, -9560],
+        ["2025-03-31", 6256, -3308],
+      ]),
+    );
+    const byDate = Object.fromEntries(f.quarters.map((q) => [q.date, q.fcf]));
+    expect(byDate["2025-03-31"]).toBe(6256 - 3308);
+  });
+
+  it("非第一季而拿不到同年前一季時該季自由現金流為 null —— 少一格勝過錯一格", () => {
+    // 抓取視窗從第三季開始，那筆仍是九個月累計，還原不了
+    const f = buildFinancials(
+      skeleton(["2024-09-30"]),
+      [],
+      cumulative([["2024-09-30", 12060, -5941]]),
+    );
+    expect(f.quarters[0]!.fcf).toBeNull();
+  });
+
+  it("季別認不得的日期不參與還原", () => {
+    const f = buildFinancials(
+      skeleton(["2024-05-15"]),
+      [],
+      cumulative([["2024-05-15", 100, -50]]),
+    );
+    expect(f.quarters[0]!.fcf).toBeNull();
+  });
+});

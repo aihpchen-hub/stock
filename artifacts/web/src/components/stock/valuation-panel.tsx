@@ -206,7 +206,9 @@ export function FinancialsPanel({ code, enabled }: { code: string; enabled: bool
 
       {quarters[0]?.fcf != null && (
         <div className="flex items-baseline justify-between gap-2 text-sm pt-1">
-          <span className="text-muted-foreground shrink-0">最近一季自由現金流</span>
+          <span className="text-muted-foreground shrink-0">
+            自由現金流（{quarters[0].date} 單季）
+          </span>
           <span className="flex-1 border-b border-dotted border-border/60 min-w-2" />
           <span className="font-mono shrink-0">
             {(quarters[0].fcf / 100_000_000).toFixed(1)} 億
@@ -215,7 +217,8 @@ export function FinancialsPanel({ code, enabled }: { code: string; enabled: bool
       )}
 
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        ROE 為單季值、非年化。自由現金流＝營運現金流減資本支出。
+        ROE 為單季值、非年化。自由現金流＝營運現金流減資本支出；原始財報的現金流量表
+        是累計數（第四季為全年），此處已還原成單季，才能與同列的單季毛利率對照。
         財報季頻且發布有延遲，最新一季未必等於最近的實際經營狀況。
       </p>
     </div>

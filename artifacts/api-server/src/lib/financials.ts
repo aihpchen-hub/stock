@@ -33,7 +33,12 @@ export interface QuarterMetrics {
   roe: number | null;
   /** 負債比（%） */
   debtRatio: number | null;
-  /** 自由現金流 = 營運現金流 − 資本支出 */
+  /**
+   * 自由現金流 = 營運現金流 − 資本支出，**單季值**。
+   *
+   * 原始的現金流量表是累計數（Q4 是全年），已在此還原成單季，
+   * 才能與同一列的單季毛利率對照。無法還原時為 null。
+   */
   fcf: number | null;
 }
 
@@ -56,6 +61,61 @@ function pivot(rows: StatementRow[]): Map<string, Map<string, number>> {
   return out;
 }
 
+/** 由日期推出會計季別。台股財報日期固定落在 3/31、6/30、9/30、12/31 */
+function quarterOf(date: string): 1 | 2 | 3 | 4 | null {
+  const month = date.slice(5, 7);
+  if (month === "03") return 1;
+  if (month === "06") return 2;
+  if (month === "09") return 3;
+  if (month === "12") return 4;
+  return null;
+}
+
+/**
+ * 把累計的現金流量表還原成單季。
+ *
+ * **現金流量表是累計數，損益表是單季** —— 實測 2330：
+ *   現金流 2024 Q1 4,363 億 → Q2 8,140 → Q3 12,060 → Q4 18,262，2025 Q1 重置
+ *   損益表 2024 Q1 5,926 億 → Q2 6,735 → Q3 7,597 → Q4 8,685（年營收 2.9 兆）
+ *
+ * 不還原就會把「全年自由現金流」擺在「單季毛利率」旁邊，而那一列看起來
+ * 完全正常 —— 使用者不會發現同一列的兩個數字算的是不同長度的期間。
+ *
+ * 非第一季而又拿不到同年前一季時整季略過：那筆仍是累計值，印出來就是錯的，
+ * 而「少一格」遠比「錯一格」安全。
+ */
+function decumulate(rows: StatementRow[]): Map<string, Map<string, number>> {
+  const byDate = pivot(rows);
+  const dates = [...byDate.keys()].sort();
+  const out = new Map<string, Map<string, number>>();
+
+  dates.forEach((date, i) => {
+    const current = byDate.get(date)!;
+    const quarter = quarterOf(date);
+    if (quarter === null) return;
+
+    if (quarter === 1) {
+      out.set(date, current);
+      return;
+    }
+
+    const prev = i > 0 ? dates[i - 1]! : null;
+    const sameYear = prev !== null && prev.slice(0, 4) === date.slice(0, 4);
+    if (!sameYear) return;
+
+    const before = byDate.get(prev!)!;
+    const single = new Map<string, number>();
+    for (const [type, value] of current) {
+      const previous = before.get(type);
+      if (previous == null) continue;
+      single.set(type, value - previous);
+    }
+    out.set(date, single);
+  });
+
+  return out;
+}
+
 /** 比率（%）。分母缺席或為零時回 null，不產生 Infinity 也不用零硬湊 */
 function ratio(numerator: number | undefined, denominator: number | undefined): number | null {
   if (numerator == null || denominator == null) return null;
@@ -70,7 +130,8 @@ export function buildFinancials(
 ): Financials {
   const inc = pivot(income);
   const bal = pivot(balance);
-  const cf = pivot(cashflow);
+  // 現金流量表是累計數，必須先還原成單季才能與損益表的單季比率並排
+  const cf = decumulate(cashflow);
 
   // 以損益表的季別為準：沒有損益表就算不出任何一個比率
   const dates = [...inc.keys()].sort().reverse();
