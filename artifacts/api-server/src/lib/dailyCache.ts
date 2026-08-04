@@ -69,7 +69,22 @@ export function analysisCacheKey(keyword: string, period: string): string {
  * 改版時遞增此處的版本號即可讓舊項目自然失效。
  */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|v4|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v5|${code.trim().toLowerCase()}|${period}`;
+}
+
+/**
+ * 大盤脈絡的快取鍵。
+ *
+ * 與個股分開存是關鍵：一次分析要查 3~5 檔，若在每檔的流程裡各抓一次
+ * 加權指數，就是每次分析多 3~5 個 FinMind 請求。獨立成一個以日為單位的
+ * 項目之後，當天第一檔查詢抓一次、其餘全部命中快取 —— 實際成本是
+ * 每日 +1 個請求。
+ *
+ * 不帶週期：大盤脈絡與使用者選的持有期無關，帶了只會讓同一份資料
+ * 被存三遍並各抓一次。
+ */
+export function marketCacheKey(): string {
+  return "market|v1|TAIEX";
 }
 
 /** 當日日期字串（YYYY-MM-DD，本地時區）—— 使用者的「今天」以本地為準 */

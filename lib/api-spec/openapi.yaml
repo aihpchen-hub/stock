@@ -298,6 +298,44 @@ components:
           nullable: true
           description: 進場後最大不利波動（%）
       required: [code, from, kind, barsHeld]
+    Returns:
+      type: object
+      properties:
+        d5:
+          type: number
+          nullable: true
+          description: 近 5 個交易日報酬（%）
+        d20:
+          type: number
+          nullable: true
+          description: 近 20 個交易日報酬（%）
+        d60:
+          type: number
+          nullable: true
+          description: 近 60 個交易日報酬（%）
+    MarketContext:
+      type: object
+      properties:
+        return5d:
+          type: number
+          nullable: true
+        return20d:
+          type: number
+          nullable: true
+        return60d:
+          type: number
+          nullable: true
+        maSignal:
+          type: string
+          enum: [above_both, above_ma20, below_both, insufficient_data]
+          description: >-
+            加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破
+            雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上
+            「分散五檔」的保護在系統性下跌時並不成立。
+        asOf:
+          type: string
+          nullable: true
+          description: 大盤資料的最後日期。與個股未必同步，因此各自標示。
     OutcomeTally:
       type: object
       properties:
@@ -714,6 +752,21 @@ components:
           type: number
           nullable: true
           description: 近20日平均成交量（股）
+        returns:
+          $ref: "#/components/schemas/Returns"
+        relativeStrength:
+          allOf:
+            - $ref: "#/components/schemas/Returns"
+          nullable: true
+          description: >-
+            個股報酬減大盤同期報酬，單位是百分點。個股漲 8% 而大盤漲 10% 時這裡
+            是 -2 —— 絕對值為正、相對大盤卻是輸的，而那正是只看個股均線判不出來
+            的事。當日抓不到加權指數時為 null。只做顯示，不進評分。
+        market:
+          allOf:
+            - $ref: "#/components/schemas/MarketContext"
+          nullable: true
+          description: 當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。
         foreignNetDays:
           type: number
           nullable: true

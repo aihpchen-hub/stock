@@ -134,6 +134,38 @@ export interface OutcomeResultItem {
   maxAdversePct?: number | null;
 }
 
+export interface Returns {
+  /** 近 5 個交易日報酬（%） */
+  d5?: number | null;
+  /** 近 20 個交易日報酬（%） */
+  d20?: number | null;
+  /** 近 60 個交易日報酬（%） */
+  d60?: number | null;
+}
+
+/**
+ * 加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破 雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上 「分散五檔」的保護在系統性下跌時並不成立。
+ */
+export type MarketContextMaSignal = typeof MarketContextMaSignal[keyof typeof MarketContextMaSignal];
+
+
+export const MarketContextMaSignal = {
+  above_both: 'above_both',
+  above_ma20: 'above_ma20',
+  below_both: 'below_both',
+  insufficient_data: 'insufficient_data',
+} as const;
+
+export interface MarketContext {
+  return5d?: number | null;
+  return20d?: number | null;
+  return60d?: number | null;
+  /** 加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破 雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上 「分散五檔」的保護在系統性下跌時並不成立。 */
+  maSignal?: MarketContextMaSignal;
+  /** 大盤資料的最後日期。與個股未必同步，因此各自標示。 */
+  asOf?: string | null;
+}
+
 export interface OutcomeTally {
   target: number;
   stop: number;
@@ -508,6 +540,11 @@ export interface StockDetailResult {
   swingHigh?: number | null;
   /** 近20日平均成交量（股） */
   avgVolume20?: number | null;
+  returns?: Returns;
+  /** 個股報酬減大盤同期報酬，單位是百分點。個股漲 8% 而大盤漲 10% 時這裡 是 -2 —— 絕對值為正、相對大盤卻是輸的，而那正是只看個股均線判不出來 的事。當日抓不到加權指數時為 null。只做顯示，不進評分。 */
+  relativeStrength?: Returns | null;
+  /** 當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。 */
+  market?: MarketContext | null;
   /** 外資30日淨買超相當於幾日平均成交量 */
   foreignNetDays?: number | null;
   /** 投信30日淨買超相當於幾日平均成交量 */

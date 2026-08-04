@@ -20,7 +20,13 @@ import { roundToTick } from "../lib/ticks";
 import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind, toDateStr } from "../lib/finmind";
 import { buildChips, type InstitutionalRow } from "../lib/chips";
 import { dailyCacheFor } from "../lib/caches";
-import { stockCacheKey, today } from "../lib/dailyCache";
+import { marketCacheKey, stockCacheKey, today } from "../lib/dailyCache";
+import {
+  buildMarketContext,
+  buildRelativeStrength,
+  buildReturns,
+  type MarketContext,
+} from "../lib/market";
 
 const router = Router();
 
@@ -32,6 +38,9 @@ const router = Router();
  * 而日線資料本來就延遲一天，同一天內重複抓只會得到同一份數字。
  */
 const stockCache = dailyCacheFor<Record<string, unknown>>();
+
+/** 大盤脈絡的日快取。與個股分開，讓一次分析只多 1 個 FinMind 請求 */
+const marketCache = dailyCacheFor<MarketContext>();
 
 /**
  * 計算規則版本。任何會改變畫面上顯示數字的變更都必須遞增，
@@ -87,6 +96,30 @@ interface RevenueRow {
   revenue_year: number;
 }
 
+/**
+ * 取得當日大盤脈絡。
+ *
+ * 抓不到時回 null 而非丟例外 —— 與 fetchFinMind 的失敗策略一致：
+ * 少了大盤脈絡，個股自己的交易計畫仍然完全有效，整個請求失敗反而讓
+ * 使用者什麼都看不到。
+ */
+async function getMarketContext(
+  day: string,
+  token: string | undefined,
+): Promise<MarketContext | null> {
+  const cached = await marketCache.get(marketCacheKey(), day);
+  if (cached) return cached;
+
+  const rows = await fetchFinMind<PriceRow>(
+    buildUrl("TaiwanStockPrice", "TAIEX", dateMinusDays(PRICE_FETCH_DAYS), token),
+  );
+  if (rows.length === 0) return null;
+
+  const context = buildMarketContext(rows);
+  await marketCache.set(marketCacheKey(), day, context);
+  return context;
+}
+
 // ─── GET /api/stock/:code ──────────────────────────────────────────────────
 router.get("/stock/:code", async (req, res) => {
   const { code } = req.params;
@@ -109,13 +142,15 @@ router.get("/stock/:code", async (req, res) => {
     //
     // 150 個日曆日 ≈ 102 個交易日。原本的 100 日只有約 68 個交易日，MA60 僅多 8 根，
     // 遇到連假或暫停交易就可能算不出來。
-    const [prices, revenues, institutionals, info] = await Promise.all([
+    const [prices, revenues, institutionals, info, market] = await Promise.all([
       fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(PRICE_FETCH_DAYS), token)),
       fetchFinMind<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
       fetchFinMind<InstitutionalRow>(
         buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(CHIPS_FETCH_DAYS), token),
       ),
       resolveStock(code),
+      // 與個股平行抓，不佔用額外的往返時間；命中日快取時完全不發請求
+      getMarketContext(day, token),
     ]);
 
     // ── Price / MA ─────────────────────────────────────────────────────────
@@ -341,6 +376,12 @@ router.get("/stock/:code", async (req, res) => {
       swingHigh: swing.high !== null ? Math.round(swing.high * 100) / 100 : null,
       swingLow: swing.low !== null ? Math.round(swing.low * 100) / 100 : null,
       avgVolume20: avgVolume20 !== null ? Math.round(avgVolume20) : null,
+      // 個股自身的多天期報酬。相對強弱要用，畫面也直接顯示 —— 少了絕對報酬，
+      // 使用者看到「相對大盤 +3%」無從判斷是兩者都漲還是兩者都跌。
+      returns: buildReturns(closes),
+      // 相對大盤。null 代表當日抓不到加權指數，畫面整塊不渲染。
+      relativeStrength: market ? buildRelativeStrength(buildReturns(closes), market) : null,
+      market,
       // Net flow expressed in days of average volume — "+91 lots" means nothing
       // without knowing whether the stock trades 100 or 100,000 lots a day.
       foreignNetDays:

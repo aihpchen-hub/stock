@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { createMemoryStore } from "./cacheStore";
-import { analysisCacheKey, createDailyCache, stockCacheKey, today } from "./dailyCache";
+import {
+  analysisCacheKey,
+  createDailyCache,
+  marketCacheKey,
+  stockCacheKey,
+  today,
+} from "./dailyCache";
 
 /** 每個測試給一份乾淨的儲存，避免互相污染 */
 const freshCache = <T>() => createDailyCache<T>(createMemoryStore());
@@ -73,7 +79,25 @@ describe("stockCacheKey", () => {
   });
 
   it("帶規則版本前綴 —— 部署當天不會讀到缺少新欄位的舊 payload", () => {
-    expect(stockCacheKey("2330", "3m")).toContain("|v4|");
+    // 驗證「有版本前綴」這個不變量，而非某個特定版號：寫死版號會讓每次
+    // 加欄位都必須順手改一次測試，而那個改動本身不帶任何驗證價值。
+    expect(stockCacheKey("2330", "3m")).toMatch(/\|v\d+\|/);
+  });
+});
+
+describe("marketCacheKey", () => {
+  it("不帶代號與週期 —— 大盤脈絡對所有標的與所有持有期都是同一份", () => {
+    expect(marketCacheKey()).toBe(marketCacheKey());
+    expect(marketCacheKey()).not.toContain("3m");
+  });
+
+  it("與個股、分析結果都不會撞鍵", () => {
+    expect(marketCacheKey()).not.toBe(stockCacheKey("TAIEX", "3m"));
+    expect(marketCacheKey()).not.toBe(analysisCacheKey("TAIEX", "3m"));
+  });
+
+  it("帶版本前綴，理由與個股快取相同", () => {
+    expect(marketCacheKey()).toMatch(/\|v\d+\|/);
   });
 });
 

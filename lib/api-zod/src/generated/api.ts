@@ -166,6 +166,23 @@ export const StockDetailResponse = zod.object({
   "swingLow": zod.number().nullish().describe('近20日最低價，作為停損位置的結構性對照'),
   "swingHigh": zod.number().nullish().describe('近20日最高價，作為壓力位置參考'),
   "avgVolume20": zod.number().nullish().describe('近20日平均成交量（股）'),
+  "returns": zod.object({
+  "d5": zod.number().nullish().describe('近 5 個交易日報酬（%）'),
+  "d20": zod.number().nullish().describe('近 20 個交易日報酬（%）'),
+  "d60": zod.number().nullish().describe('近 60 個交易日報酬（%）')
+}).optional(),
+  "relativeStrength": zod.object({
+  "d5": zod.number().nullish().describe('近 5 個交易日報酬（%）'),
+  "d20": zod.number().nullish().describe('近 20 個交易日報酬（%）'),
+  "d60": zod.number().nullish().describe('近 60 個交易日報酬（%）')
+}).nullish().describe('個股報酬減大盤同期報酬，單位是百分點。個股漲 8% 而大盤漲 10% 時這裡 是 -2 —— 絕對值為正、相對大盤卻是輸的，而那正是只看個股均線判不出來 的事。當日抓不到加權指數時為 null。只做顯示，不進評分。'),
+  "market": zod.object({
+  "return5d": zod.number().nullish(),
+  "return20d": zod.number().nullish(),
+  "return60d": zod.number().nullish(),
+  "maSignal": zod.enum(['above_both', 'above_ma20', 'below_both', 'insufficient_data']).optional().describe('加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破 雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上 「分散五檔」的保護在系統性下跌時並不成立。'),
+  "asOf": zod.string().nullish().describe('大盤資料的最後日期。與個股未必同步，因此各自標示。')
+}).nullish().describe('當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。'),
   "foreignNetDays": zod.number().nullish().describe('外資30日淨買超相當於幾日平均成交量'),
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
