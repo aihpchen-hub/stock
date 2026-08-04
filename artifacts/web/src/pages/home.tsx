@@ -5,7 +5,7 @@ import { useSettings } from '@/hooks/use-settings';
 import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
 import { AnalyzeRequestPeriod, useVerifyOutcomes, VerifyOutcomesResult } from '@workspace/api-client-react';
-import { buildVerifyGroups, isRipe } from '@/lib/verify';
+import { buildVerifyGroups, isRipe, OUTCOME_LABEL } from '@/lib/verify';
 import { NumberField } from '@/components/number-field';
 import {
   MAX_ALLOWED_POSITION_PCT,
@@ -223,30 +223,56 @@ export default function Home() {
                 key={ruleVersion}
                 className="mt-6 space-y-4 p-4 bg-background rounded-xl border border-border"
               >
-                <div className="flex justify-between items-center pb-2 border-b border-border">
-                  <div>
-                    <span className="text-muted-foreground">達標率</span>
-                    <span className="ml-2 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
-                      規則 v{ruleVersion}
+                <div className="space-y-2 pb-3 border-b border-border">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className="text-muted-foreground">達標率</span>
+                      <span className="ml-2 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">
+                        規則 v{ruleVersion}
+                      </span>
+                    </div>
+                    <span className="text-2xl font-bold text-primary">
+                      {/* targetRate 後端已經是百分比（3/4 回 75），不可再乘 100 */}
+                      {tally.targetRate != null ? `${tally.targetRate.toFixed(1)}%` : '尚無結論'}
                     </span>
                   </div>
-                  <span className="text-2xl font-bold text-primary">
-                    {/* targetRate 後端已經是百分比（3/4 回 75），不可再乘 100 */}
-                    {tally.targetRate != null ? `${tally.targetRate.toFixed(1)}%` : '尚無結論'}
-                  </span>
+                  {/* 成立率必須與達標率並列。達標率的分母只算已分出勝負的筆數，
+                      單獨看會讓「大部分計畫從未觸發進場」完全看不見 ——
+                      而那決定這個工具實不實用。 */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground text-sm">計畫成立率</span>
+                    <span className="text-lg font-bold">
+                      {tally.entryRate != null ? `${tally.entryRate.toFixed(1)}%` : '尚無結論'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    達標率的分母只算已分出勝負的 {tally.decided} 筆；成立率算的是價格確實
+                    進入過進場區的 {tally.entered ?? 0} 筆。兩者分母不同，不能相乘。
+                  </p>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                {/* 五格而非三格：未進場與同日觸及兩者先前完全沒顯示，
+                    OUTCOME_LABEL 早就定義好文字卻沒用上。少了它們，
+                    使用者手上 50 筆紀錄而畫面只加得出 10 筆，差額沒有一個字解釋。 */}
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center text-sm">
                   <div className="bg-muted rounded p-2">
                     <div className="text-primary font-bold">{tally.target}</div>
-                    <div className="text-muted-foreground text-xs mt-1">達標</div>
+                    <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['target']}</div>
                   </div>
                   <div className="bg-muted rounded p-2">
                     <div className="text-destructive font-bold">{tally.stop}</div>
-                    <div className="text-muted-foreground text-xs mt-1">停損</div>
+                    <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['stop']}</div>
                   </div>
                   <div className="bg-muted rounded p-2">
                     <div className="text-foreground font-bold">{tally.open}</div>
-                    <div className="text-muted-foreground text-xs mt-1">仍持有</div>
+                    <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['open']}</div>
+                  </div>
+                  <div className="bg-muted rounded p-2">
+                    <div className="text-muted-foreground font-bold">{tally.noEntry}</div>
+                    <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['no_entry']}</div>
+                  </div>
+                  <div className="bg-muted rounded p-2">
+                    <div className="text-muted-foreground font-bold">{tally.ambiguous}</div>
+                    <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['ambiguous']}</div>
                   </div>
                 </div>
               </div>
