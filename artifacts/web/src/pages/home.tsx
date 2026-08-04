@@ -71,7 +71,10 @@ export default function Home() {
    * 於是剛開始用的人只會看到一個按下去回「沒有足夠時間的歷史紀錄」的按鈕。
    * 改成沒有可驗證的紀錄時整塊不渲染，紀錄養夠了它才會帶著真實數據出現。
    */
-  const hasRipeHistory = useMemo(() => history.some((entry) => isRipe(entry.createdAt)), [history]);
+  const hasRipeHistory = useMemo(
+    () => history.some((entry) => isRipe(entry.createdAt, entry.period)),
+    [history],
+  );
 
   // Group history by keyword
   const groupedHistory = useMemo(() => {

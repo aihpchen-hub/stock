@@ -10,16 +10,25 @@ import { loadSnapshot } from './history';
 import type { VerifyOutcomeItem } from '@workspace/api-client-react';
 
 /**
- * 至少要經過幾個交易日才值得驗證。
+ * 各週期至少要經過幾個日曆日才值得驗證。
  *
  * 太早去對答案，絕大多數都還是「仍持有」，除了消耗額度沒有意義。
- * 五天約當一週，是最短還能看出東西的長度 —— 這個數字只影響「何時開始檢查」，
- * 不影響任何判定結果，所以不像機率表那樣需要驗證。
+ * 門檻必須隨週期走：計畫的失效期限是 10／20／30 個交易日（見 lib/advice 的
+ * EXPIRY_TRADING_DAYS），一份 6m 計畫存五個交易日就去問，幾乎必然回
+ * 「仍持有」或「未進場」—— 使用者第一次用就拿到一個沒有結論的畫面，
+ * 很容易就不再點了。先前固定七個日曆日，對 1m 合理，對 6m 太短。
+ *
+ * 取各週期失效期限的一半，再換算成日曆日（交易日 × 7/5）：
+ *   1m：10 個交易日 → 一半 5 → 7 個日曆日
+ *   3m：20 個交易日 → 一半 10 → 14 個日曆日
+ *   6m：30 個交易日 → 一半 15 → 21 個日曆日
+ * 「一半」是經驗值，只影響何時開始檢查，不影響任何判定結果 ——
+ * 因此不像機率表那樣需要驗證。
  */
-export const MIN_TRADING_DAYS_BEFORE_VERIFY = 5;
+const MIN_CALENDAR_DAYS: Record<string, number> = { '1m': 7, '3m': 14, '6m': 21 };
 
-/** 週末不開盤，五個交易日約當七個日曆日 */
-const MIN_CALENDAR_DAYS = 7;
+/** 週期缺失或認不得時採用的基準，與後端 normalizePeriod 一致 */
+const DEFAULT_PERIOD = '3m';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,8 +41,13 @@ export function toDateKey(ms: number): string {
 }
 
 /** 這筆紀錄是否已經舊到值得驗證 */
-export function isRipe(createdAt: number, now: number = Date.now()): boolean {
-  return now - createdAt >= MIN_CALENDAR_DAYS * DAY_MS;
+export function isRipe(
+  createdAt: number,
+  period: string | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  const days = MIN_CALENDAR_DAYS[period ?? ''] ?? MIN_CALENDAR_DAYS[DEFAULT_PERIOD]!;
+  return now - createdAt >= days * DAY_MS;
 }
 
 /** 快照裡沒有 ruleVersion 欄位者，是規則第一版留下的 */
@@ -87,7 +101,7 @@ export async function buildVerifyItems(
   index: HistoryMeta[],
   now: number = Date.now(),
 ): Promise<VerifyOutcomeItem[]> {
-  const ripe = index.filter((entry) => isRipe(entry.createdAt, now));
+  const ripe = index.filter((entry) => isRipe(entry.createdAt, entry.period, now));
   const snapshots = await Promise.all(ripe.map((entry) => loadSnapshot(entry.id)));
   return snapshots.flatMap((snapshot) => (snapshot ? itemsFromSnapshot(snapshot) : []));
 }
@@ -102,7 +116,7 @@ export async function buildVerifyGroups(
   index: HistoryMeta[],
   now: number = Date.now(),
 ): Promise<VerifyGroup[]> {
-  const ripe = index.filter((entry) => isRipe(entry.createdAt, now));
+  const ripe = index.filter((entry) => isRipe(entry.createdAt, entry.period, now));
   const snapshots = await Promise.all(ripe.map((entry) => loadSnapshot(entry.id)));
 
   const byVersion = new Map<number, VerifyOutcomeItem[]>();

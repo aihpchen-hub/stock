@@ -55,14 +55,30 @@ describe('toDateKey', () => {
 describe('isRipe', () => {
   const now = new Date(2026, 6, 20).getTime();
 
-  it('未滿七個日曆日不驗證', () => {
-    expect(isRipe(now - 3 * DAY, now)).toBe(false);
-    expect(isRipe(now, now)).toBe(false);
+  it('短線計畫等一週就值得對答案 —— 它的失效期限只有 10 個交易日', () => {
+    expect(isRipe(now - 6 * DAY, '1m', now)).toBe(false);
+    expect(isRipe(now - 7 * DAY, '1m', now)).toBe(true);
   });
 
-  it('滿七個日曆日才驗證', () => {
-    expect(isRipe(now - 7 * DAY, now)).toBe(true);
-    expect(isRipe(now - 30 * DAY, now)).toBe(true);
+  it('波段計畫要等更久 —— 失效期限 20 個交易日，太早問只會拿到「仍持有」', () => {
+    expect(isRipe(now - 13 * DAY, '3m', now)).toBe(false);
+    expect(isRipe(now - 14 * DAY, '3m', now)).toBe(true);
+  });
+
+  it('中長線計畫等最久 —— 30 個交易日約當六週', () => {
+    expect(isRipe(now - 20 * DAY, '6m', now)).toBe(false);
+    expect(isRipe(now - 21 * DAY, '6m', now)).toBe(true);
+  });
+
+  it('剛存下來的紀錄一律不驗證', () => {
+    expect(isRipe(now, '1m', now)).toBe(false);
+    expect(isRipe(now, '6m', now)).toBe(false);
+  });
+
+  it('週期缺失或認不得時退回基準週期，與 strategyFor 的處理一致', () => {
+    expect(isRipe(now - 14 * DAY, null, now)).toBe(true);
+    expect(isRipe(now - 13 * DAY, undefined, now)).toBe(false);
+    expect(isRipe(now - 13 * DAY, '99y', now)).toBe(false);
   });
 });
 
