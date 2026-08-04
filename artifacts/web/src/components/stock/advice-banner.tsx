@@ -1,6 +1,7 @@
 import React from 'react';
 import { StockDetailResult } from '@workspace/api-client-react';
 import { CheckCircle2, Clock, XCircle, HelpCircle } from 'lucide-react';
+import { priceStaleness } from '@/lib/staleness';
 
 interface AdviceBannerProps {
   advice?: StockDetailResult['advice'];
@@ -9,6 +10,8 @@ interface AdviceBannerProps {
   entryHigh?: number | null;
   stopLoss?: number | null;
   priceAsOf?: string | null;
+  /** 注入時鐘，預設為現在。抽成 prop 才能測跨連假的顯示 */
+  now?: Date;
 }
 
 /**
@@ -25,6 +28,7 @@ export function AdviceBanner({
   entryHigh,
   stopLoss,
   priceAsOf,
+  now = new Date(),
 }: AdviceBannerProps) {
   // 舊快照沒有這個欄位，但呼叫端（stock-card）已改為以 deriveAdvice 補算，
   // 正常情況下必定有值。這裡保留防禦性判斷 —— 缺值時整塊不渲染，不顯示半截狀態。
@@ -95,6 +99,7 @@ export function AdviceBanner({
   if (!view) return null;
 
   const { Icon, title, body, className } = view;
+  const stale = priceStaleness(priceAsOf, now);
 
   return (
     <div className={`border rounded-lg p-4 flex items-start gap-3 ${className}`}>
@@ -102,9 +107,21 @@ export function AdviceBanner({
       <div className="space-y-1 min-w-0">
         <div className="font-bold">{title}</div>
         <div className="text-sm text-foreground/80 break-words">{body}</div>
-        {priceAsOf && (
-          <div className="text-xs text-muted-foreground">
-            以 {priceAsOf} 收盤價判斷，非盤中即時報價
+        {/* 這行先前是 text-xs 的灰字，而它正上方的現價是 text-xl 粗體 ——
+            視覺權重與資訊重要性完全相反。使用者最容易犯的錯就是照著昨天的
+            收盤價今天掛單，而台股開盤跳空是常態。過期時給警示底色，
+            並把「幾天前」直接算出來：連假後那個差距可能是四天。 */}
+        {stale && (
+          <div
+            className={`text-xs rounded px-2 py-1 mt-1 ${
+              stale.stale
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium'
+                : 'text-muted-foreground'
+            }`}
+          >
+            {stale.stale
+              ? `⚠️ 這是 ${stale.days} 個日曆日前（${priceAsOf}）的收盤價，非盤中即時報價 —— 請勿直接照此價位掛單`
+              : `以 ${priceAsOf} 收盤價判斷，非盤中即時報價`}
           </div>
         )}
       </div>
