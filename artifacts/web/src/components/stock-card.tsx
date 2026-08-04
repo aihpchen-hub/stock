@@ -9,15 +9,18 @@ import { ChipsPanel } from '@/components/stock/chips-panel';
 import { SignalList } from '@/components/stock/signal-list';
 import { DataFreshness } from '@/components/data-freshness';
 import { strategyFor } from '@/lib/strategy';
+import type { StoredVerify } from '@/lib/verifyStore';
 
 interface StockCardProps {
   stock: StockInfo;
   detail?: StockDetailResult;
   loading: boolean;
   settings: RiskSettings;
+  /** 這張卡片所屬規則版本的實際驗證結果。null 代表尚未累積到可驗證的紀錄 */
+  verified?: StoredVerify | null;
 }
 
-export function StockCard({ stock, detail, loading, settings }: StockCardProps) {
+export function StockCard({ stock, detail, loading, settings, verified }: StockCardProps) {
   if (loading || !detail) {
     return (
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm animate-pulse space-y-4">
@@ -201,6 +204,23 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
             )}
           </div>
           
+          {/* 實際達標率印在 E(V) 正下方。E(V) 是由一張未經回測的機率表算出來的
+              （README「判斷層與計算層分開陳述」那一節有標示），而前瞻驗證是唯一
+              能校正那個印象的東西 —— 它先前只出現在首頁，等於把宣稱與檢驗
+              放在兩個不同的畫面上。 */}
+          {verified?.tally.targetRate != null && (
+            <div className="text-xs bg-muted/40 border border-border rounded px-2 py-1.5 leading-relaxed">
+              <span className="text-muted-foreground">這套規則（v{verified.ruleVersion}）目前實測：</span>
+              <span className="font-bold text-foreground"> 達標率 {verified.tally.targetRate.toFixed(1)}%</span>
+              <span className="text-muted-foreground">（已結案 {verified.tally.decided} 筆）</span>
+              {verified.tally.entryRate != null && (
+                <span className="text-muted-foreground">
+                  ，計畫成立率 {verified.tally.entryRate.toFixed(1)}%
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
             <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />

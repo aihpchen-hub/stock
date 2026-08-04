@@ -10,6 +10,7 @@ import {
 } from '@workspace/api-client-react';
 import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
+import { latestFor, loadVerify } from '@/lib/verifyStore';
 import { useSettings } from '@/hooks/use-settings';
 import { StockCard } from '@/components/stock-card';
 import { ArrowLeft, Loader2, Newspaper, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -88,6 +89,10 @@ export default function Analysis() {
       setSaved(true);
     }
   }, [queries, analysis, isRestoring, saved, derivedStockDetails, keyword, period]);
+
+  // 驗證結果只在掛載時讀一次 —— 它是使用者在首頁跑出來的，本頁不會改變它，
+  // 沒有理由每次 render 都重新解析一遍 localStorage。
+  const verifySummaries = useMemo(() => loadVerify(), []);
 
   const sortedStocks = useMemo(() => {
     if (!analysis) return [];
@@ -261,12 +266,17 @@ export default function Analysis() {
                 const detail = derivedStockDetails[stock.code];
                 const isLoading = !isRestoring && (!queries[i] || queries[i].isPending);
                 return (
-                  <StockCard 
-                    key={stock.code} 
-                    stock={stock} 
-                    detail={detail} 
-                    loading={isLoading} 
+                  <StockCard
+                    key={stock.code}
+                    stock={stock}
+                    detail={detail}
+                    loading={isLoading}
                     settings={settings}
+                    verified={
+                      detail?.ruleVersion != null
+                        ? latestFor(verifySummaries, detail.ruleVersion)
+                        : null
+                    }
                   />
                 );
               })}

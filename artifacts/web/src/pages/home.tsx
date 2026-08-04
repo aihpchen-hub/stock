@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { Search, History, Settings, CheckCircle2, ChevronDown, ChevronRight, X, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useSettings } from '@/hooks/use-settings';
@@ -83,6 +83,23 @@ export default function Home() {
     () => history.some((entry) => isRipe(entry.createdAt, entry.period)),
     [history],
   );
+
+  /**
+   * 有可驗證的紀錄而且還沒有任何結果時，自動跑一次。
+   *
+   * 這個功能的價值來自累積 —— 靠使用者記得手動點擊等於沒有。
+   * 只在「完全沒有存下來的結果」時觸發，不做定時重跑：後端一次最多收 40 筆，
+   * 而重跑的邊際價值遠低於它消耗的請求。想要更新的人按「重新對答案」即可。
+   */
+  useEffect(() => {
+    if (!hasRipeHistory) return;
+    if (verifyResults !== null) return;
+    if (verifyOutcomes.isPending) return;
+    void handleVerify();
+    // handleVerify 每次 render 都是新的參考，列進相依會造成無限迴圈；
+    // 這裡要的就是「條件成立時跑一次」。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRipeHistory, verifyResults]);
 
   // Group history by keyword
   const groupedHistory = useMemo(() => {
@@ -226,7 +243,11 @@ export default function Home() {
               disabled={verifyOutcomes.isPending}
               className="w-full py-3 bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl font-medium transition-colors disabled:opacity-50"
             >
-              {verifyOutcomes.isPending ? '驗證中...' : '對答案'}
+              {verifyOutcomes.isPending
+                ? '驗證中...'
+                : verifyResults
+                  ? '重新對答案'
+                  : '對答案'}
             </button>
 
             {verifyResults?.map(({ ruleVersion, tally, verifiedAt }) => (
