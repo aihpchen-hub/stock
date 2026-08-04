@@ -21,6 +21,25 @@ export function calcMA(closes: number[], period: number): number | null {
 }
 
 /**
+ * N 個交易日的報酬率（%）。
+ *
+ * 只取頭尾兩根收盤價 —— 中間怎麼走與「這段期間漲跌多少」無關。
+ * 回傳百分比而非小數，與畫面上其他百分比欄位（月營收 YoY、E(V)）一致；
+ * 少了這個約定，會在某一層被乘或除 100 兩次。
+ *
+ * 資料不足 days+1 根時回 null：拿短一截的區間硬湊，會讓不同標的的
+ * 「20 日報酬」實際上是不同長度，相對強弱就失去意義。
+ */
+export function calcReturn(closes: number[], days: number): number | null {
+  if (days <= 0) return null;
+  if (closes.length < days + 1) return null;
+  const now = closes[closes.length - 1]!;
+  const then = closes[closes.length - 1 - days]!;
+  if (!(then > 0) || !Number.isFinite(now)) return null;
+  return ((now - then) / then) * 100;
+}
+
+/**
  * 平均真實振幅（Average True Range）。
  *
  * True Range 取「當日高低差」「當日高與前收之差」「當日低與前收之差」三者最大值，

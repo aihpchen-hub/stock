@@ -5,6 +5,7 @@ import {
   calcATR,
   calcAvgVolume,
   calcMA,
+  calcReturn,
   calcSwing,
   calcTrailingStop,
   calcEMA,
@@ -330,5 +331,40 @@ describe("calcVolumeProfile", () => {
 
   it("沒有任何有效成交量時回傳 null", () => {
     expect(calcVolumeProfile([bar(10, 11, 9, 0)])).toBeNull();
+  });
+});
+
+describe("calcReturn", () => {
+  it("回傳百分比而非小數 —— 與畫面上其他百分比欄位一致", () => {
+    expect(calcReturn([100, 101, 102, 103, 104, 110], 5)).toBeCloseTo(10, 6);
+  });
+
+  it("下跌回負值", () => {
+    expect(calcReturn([100, 99, 98, 97, 96, 90], 5)).toBeCloseTo(-10, 6);
+  });
+
+  it("只看頭尾兩根，中間的路徑不影響結果", () => {
+    const straight = calcReturn([100, 105, 110], 2);
+    const volatile = calcReturn([100, 200, 110], 2);
+    expect(straight).toBeCloseTo(volatile!, 6);
+  });
+
+  it("資料不足 days+1 根時回 null，不用短一截的區間硬湊", () => {
+    expect(calcReturn([100, 110], 5)).toBeNull();
+    expect(calcReturn([], 1)).toBeNull();
+  });
+
+  it("剛好 days+1 根就算得出來", () => {
+    expect(calcReturn([100, 110], 1)).toBeCloseTo(10, 6);
+  });
+
+  it("起始價為零或負數時回 null，不產生 Infinity", () => {
+    expect(calcReturn([0, 110], 1)).toBeNull();
+    expect(calcReturn([-5, 110], 1)).toBeNull();
+  });
+
+  it("days 非正數時回 null", () => {
+    expect(calcReturn([100, 110], 0)).toBeNull();
+    expect(calcReturn([100, 110], -3)).toBeNull();
   });
 });
