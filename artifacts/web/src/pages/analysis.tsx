@@ -11,6 +11,7 @@ import {
 import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
 import { latestFor, loadVerify } from '@/lib/verifyStore';
+import { rankByStrength } from '@/lib/groupStrength';
 import { useSettings } from '@/hooks/use-settings';
 import { StockCard } from '@/components/stock-card';
 import { ArrowLeft, Loader2, Newspaper, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -93,6 +94,18 @@ export default function Analysis() {
   // 驗證結果只在掛載時讀一次 —— 它是使用者在首頁跑出來的，本頁不會改變它，
   // 沒有理由每次 render 都重新解析一遍 localStorage。
   const verifySummaries = useMemo(() => loadVerify(), []);
+
+  // 族群排名用同一批已載入的明細算，不發任何請求
+  const groupRanks = useMemo(
+    () =>
+      rankByStrength(
+        Object.entries(derivedStockDetails).map(([code, d]) => ({
+          code,
+          return20d: d.returns?.d20 ?? null,
+        })),
+      ),
+    [derivedStockDetails],
+  );
 
   const sortedStocks = useMemo(() => {
     if (!analysis) return [];
@@ -277,6 +290,7 @@ export default function Analysis() {
                         ? latestFor(verifySummaries, detail.ruleVersion)
                         : null
                     }
+                    groupRank={groupRanks[stock.code] ?? null}
                   />
                 );
               })}

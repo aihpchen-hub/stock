@@ -10,6 +10,8 @@ import { SignalList } from '@/components/stock/signal-list';
 import { DataFreshness } from '@/components/data-freshness';
 import { strategyFor } from '@/lib/strategy';
 import type { StoredVerify } from '@/lib/verifyStore';
+import { MarketPanel } from '@/components/stock/market-panel';
+import type { GroupRank } from '@/lib/groupStrength';
 
 interface StockCardProps {
   stock: StockInfo;
@@ -18,9 +20,18 @@ interface StockCardProps {
   settings: RiskSettings;
   /** 這張卡片所屬規則版本的實際驗證結果。null 代表尚未累積到可驗證的紀錄 */
   verified?: StoredVerify | null;
+  /** 同一條供應鏈內的相對強弱排名。null 代表無可比對象 */
+  groupRank?: GroupRank | null;
 }
 
-export function StockCard({ stock, detail, loading, settings, verified }: StockCardProps) {
+export function StockCard({
+  stock,
+  detail,
+  loading,
+  settings,
+  verified,
+  groupRank,
+}: StockCardProps) {
   if (loading || !detail) {
     return (
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm animate-pulse space-y-4">
@@ -70,6 +81,9 @@ export function StockCard({ stock, detail, loading, settings, verified }: StockC
     stopBasis,
     narrative,
     swingLow,
+    returns,
+    relativeStrength,
+    market,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -256,6 +270,14 @@ export function StockCard({ stock, detail, loading, settings, verified }: StockC
             {!chips && <MetricCard label="外資（約24日）" value={formatInstitutional(foreignNet30d)} />}
             {!chips && <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />}
           </div>
+          {/* 相對強弱排在籌碼之前：它回答的是「這檔到底強不強」，
+              而籌碼是解釋強弱成因的其中一個面向。 */}
+          <MarketPanel
+            returns={returns}
+            relativeStrength={relativeStrength}
+            market={market}
+            groupRank={groupRank}
+          />
           {chips && <ChipsPanel chips={chips} chipsAsOf={chipsAsOf} />}
           <SignalList signals={signals} trend={trend} trendBasis={trendBasis} />
         </div>
