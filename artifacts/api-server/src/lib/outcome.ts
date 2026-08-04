@@ -146,6 +146,18 @@ export interface OutcomeTally {
   decided: number;
   /** 達標率；decided 為 0 時為 null，不顯示 0% 假裝有結論 */
   targetRate: number | null;
+  /** 真的進場的筆數（達標＋停損＋同日觸及＋仍持有），成立率的分子 */
+  entered: number;
+  /**
+   * 成立率（%）—— 計畫中有多少比例真的變成交易。
+   *
+   * 達標率的分母刻意排除了未進場的計畫，那在統計上正確；但少了這個數字，
+   * 「大部分計畫從未成立」這件事在畫面上完全看不見，而它決定這個工具的
+   * 實用價值：40 筆從未成立、6 筆達標、4 筆停損，達標率是漂亮的 60%，
+   * 實際上只有五分之一的計畫變成交易。
+   * 可判定筆數為 0 時為 null，不以 0% 假裝有結論。
+   */
+  entryRate: number | null;
 }
 
 /**
@@ -164,6 +176,8 @@ export function tallyOutcomes(results: Array<{ kind: OutcomeKind }>): OutcomeTal
     unknown: 0,
     decided: 0,
     targetRate: null,
+    entered: 0,
+    entryRate: null,
   };
 
   for (const { kind } of results) {
@@ -178,5 +192,14 @@ export function tallyOutcomes(results: Array<{ kind: OutcomeKind }>): OutcomeTal
   tally.decided = tally.target + tally.stop;
   tally.targetRate =
     tally.decided > 0 ? Math.round((tally.target / tally.decided) * 1000) / 10 : null;
+
+  // 成立＝價格確實進入過進場區，因此仍持有與同日觸及兩者都算 —— 那些交易
+  // 確實發生了。unknown 是「判不出來」，兩邊都不進，與 ambiguous 不進
+  // 達標率分母同一個原則：不知道就是不知道。
+  tally.entered = tally.target + tally.stop + tally.ambiguous + tally.open;
+  const entryDecided = tally.entered + tally.noEntry;
+  tally.entryRate =
+    entryDecided > 0 ? Math.round((tally.entered / entryDecided) * 1000) / 10 : null;
+
   return tally;
 }

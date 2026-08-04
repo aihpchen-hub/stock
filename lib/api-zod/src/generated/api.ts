@@ -231,7 +231,9 @@ export const VerifyOutcomesResponse = zod.object({
   "noEntry": zod.number(),
   "unknown": zod.number(),
   "decided": zod.number().describe('已分出勝負的筆數（達標＋停損），命中率的分母'),
-  "targetRate": zod.number().nullish().describe('達標率（%）。尚無已結案筆數時為 null，不以 0% 假裝有結論。')
+  "targetRate": zod.number().nullish().describe('達標率（%）。尚無已結案筆數時為 null，不以 0% 假裝有結論。'),
+  "entered": zod.number().describe('真的進場的筆數（達標＋停損＋同日觸及＋仍持有），成立率的分子'),
+  "entryRate": zod.number().nullish().describe('成立率（%）—— 計畫中有多少比例真的變成交易。達標率的分母排除了未進場的 計畫，那在統計上正確，但少了這個數字「大部分計畫從未成立」在畫面上 完全看不見，而它決定這個工具的實用價值。可判定筆數為 0 時為 null。')
 })
 })
 

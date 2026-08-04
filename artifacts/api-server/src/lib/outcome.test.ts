@@ -136,4 +136,36 @@ describe("tallyOutcomes", () => {
     expect(t.decided).toBe(1);
     expect(t.targetRate).toBe(100);
   });
+
+  it("成立率的分子是真的進場的筆數，達標率看不出這件事", () => {
+    // 40 筆從未觸發進場、6 筆達標、4 筆停損 —— 達標率 60% 講的是
+    // 「成立的那 10 筆裡有幾筆達標」，而使用者手上有 50 筆紀錄。
+    // 少了成立率，那 40 筆會在畫面上憑空消失。
+    const results = [
+      ...Array.from({ length: 40 }, () => ({ kind: "no_entry" as const })),
+      ...Array.from({ length: 6 }, () => ({ kind: "target" as const })),
+      ...Array.from({ length: 4 }, () => ({ kind: "stop" as const })),
+    ];
+    const t = tallyOutcomes(results);
+    expect(t.targetRate).toBe(60);
+    expect(t.entered).toBe(10);
+    expect(t.entryRate).toBe(20);
+  });
+
+  it("仍持有與同日觸及兩者都算成立 —— 那些交易確實發生了", () => {
+    const t = tallyOutcomes([{ kind: "open" }, { kind: "ambiguous" }, { kind: "no_entry" }]);
+    expect(t.entered).toBe(2);
+    expect(t.entryRate).toBeCloseTo(66.7, 1);
+  });
+
+  it("資料不足者不進成立率的分母 —— 與 ambiguous 不進達標率分母同一個原則", () => {
+    const t = tallyOutcomes([{ kind: "target" }, { kind: "no_entry" }, { kind: "unknown" }]);
+    // 分母是 1 筆成立 + 1 筆未進場 = 2，unknown 兩邊都不算
+    expect(t.entryRate).toBe(50);
+  });
+
+  it("沒有任何可判定的筆數時成立率為 null，不以 0% 假裝有結論", () => {
+    expect(tallyOutcomes([{ kind: "unknown" }]).entryRate).toBeNull();
+    expect(tallyOutcomes([]).entryRate).toBeNull();
+  });
 });
