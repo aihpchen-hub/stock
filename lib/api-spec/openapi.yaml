@@ -82,6 +82,31 @@ paths:
                 $ref: "#/components/schemas/StockDetailResult"
         "500":
           description: 資料抓取失敗
+  /stock/{code}/fundamentals:
+    get:
+      operationId: stockFundamentals
+      tags: [stock]
+      summary: 財報三表衍生的品質比率（延後載入）
+      description: >-
+        毛利率、營益率、ROE、負債比與自由現金流的多季趨勢。刻意不放進
+        /stock/{code} 的主流程：那裡已有六個 FinMind 請求，再加三張報表
+        就是一次分析 27~45 個請求，尖峰會直接打到首次查詢。只有價值與
+        存股兩個視圖需要，由前端在切到那些視圖時才請求。
+        抓取失敗時回傳空的 quarters 而非 500 —— 個股其餘部分不受影響。
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 台股股票代號（如：2330）
+      responses:
+        "200":
+          description: 財報品質比率。quarters 為空代表無資料或抓取失敗。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Financials"
   /outcomes:
     post:
       operationId: verifyOutcomes
@@ -336,6 +361,115 @@ components:
           type: string
           nullable: true
           description: 大盤資料的最後日期。與個股未必同步，因此各自標示。
+    MetricBand:
+      type: object
+      properties:
+        current:
+          type: number
+          nullable: true
+        percentile:
+          type: number
+          nullable: true
+          description: >-
+            目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有
+            八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。
+        low:
+          type: number
+          nullable: true
+        median:
+          type: number
+          nullable: true
+        high:
+          type: number
+          nullable: true
+        samples:
+          type: number
+          description: 實際參與計算的樣本數，讓畫面能標明區間的可信度
+      required: [samples]
+    Valuation:
+      type: object
+      properties:
+        per:
+          $ref: "#/components/schemas/MetricBand"
+        pbr:
+          $ref: "#/components/schemas/MetricBand"
+        dividendYield:
+          $ref: "#/components/schemas/MetricBand"
+        asOf:
+          type: string
+          nullable: true
+      required: [per, pbr, dividendYield]
+    DividendSummary:
+      type: object
+      properties:
+        consecutiveYears:
+          type: number
+          description: >-
+            從最新年度往回數的連續配息年數。不是「有配息的年數」——
+            實測 2412 中華電 2009 年缺席，總年數 21 但連續只有 17。
+        latestYear:
+          type: string
+          nullable: true
+        latestCash:
+          type: number
+          nullable: true
+          description: 最近一個有配息年度的現金股利合計（季配會有多筆）
+        avgCash5y:
+          type: number
+          nullable: true
+        coverageFrom:
+          type: string
+          nullable: true
+          description: 資料涵蓋的最早年度。文案只能寫「N 年起」，不得宣稱完整歷史。
+        filled:
+          type: number
+          description: 填息成功次數
+        filledTotal:
+          type: number
+          description: 可判定的除息次數（缺價位者不計）
+      required: [consecutiveYears, filled, filledTotal]
+    QuarterMetrics:
+      type: object
+      properties:
+        date:
+          type: string
+        grossMargin:
+          type: number
+          nullable: true
+        operatingMargin:
+          type: number
+          nullable: true
+        netMargin:
+          type: number
+          nullable: true
+        eps:
+          type: number
+          nullable: true
+        roe:
+          type: number
+          nullable: true
+          description: 股東權益報酬率（%）。單季值，非年化 —— 畫面必須標明。
+        debtRatio:
+          type: number
+          nullable: true
+        fcf:
+          type: number
+          nullable: true
+          description: 自由現金流 = 營運現金流 − 資本支出
+      required: [date]
+    Financials:
+      type: object
+      properties:
+        quarters:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuarterMetrics"
+          description: 由新到舊
+        asOf:
+          type: string
+          nullable: true
+          description: 最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。
+      required: [quarters]
     OutcomeTally:
       type: object
       properties:
@@ -767,6 +901,10 @@ components:
             - $ref: "#/components/schemas/MarketContext"
           nullable: true
           description: 當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。
+        valuation:
+          $ref: "#/components/schemas/Valuation"
+        dividend:
+          $ref: "#/components/schemas/DividendSummary"
         foreignNetDays:
           type: number
           nullable: true

@@ -183,6 +183,42 @@ export const StockDetailResponse = zod.object({
   "maSignal": zod.enum(['above_both', 'above_ma20', 'below_both', 'insufficient_data']).optional().describe('加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破 雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上 「分散五檔」的保護在系統性下跌時並不成立。'),
   "asOf": zod.string().nullish().describe('大盤資料的最後日期。與個股未必同步，因此各自標示。')
 }).nullish().describe('當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。'),
+  "valuation": zod.object({
+  "per": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "pbr": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "dividendYield": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "asOf": zod.string().nullish()
+}).optional(),
+  "dividend": zod.object({
+  "consecutiveYears": zod.number().describe('從最新年度往回數的連續配息年數。不是「有配息的年數」—— 實測 2412 中華電 2009 年缺席，總年數 21 但連續只有 17。'),
+  "latestYear": zod.string().nullish(),
+  "latestCash": zod.number().nullish().describe('最近一個有配息年度的現金股利合計（季配會有多筆）'),
+  "avgCash5y": zod.number().nullish(),
+  "coverageFrom": zod.string().nullish().describe('資料涵蓋的最早年度。文案只能寫「N 年起」，不得宣稱完整歷史。'),
+  "filled": zod.number().describe('填息成功次數'),
+  "filledTotal": zod.number().describe('可判定的除息次數（缺價位者不計）')
+}).optional(),
   "foreignNetDays": zod.number().nullish().describe('外資30日淨買超相當於幾日平均成交量'),
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
@@ -211,6 +247,29 @@ export const StockDetailResponse = zod.object({
   "narrative": zod.string().nullish().describe('由已算出的欄位組成的中文摘要。\*\*模板組句，不呼叫任何模型\*\* —— 因此永遠不會與畫面上的數字牴觸。任一欄位缺席時該段整句略過。 planKind 為 none 時整段價位不入句，不把畫面剛抑制掉的矛盾用文字重講一次。'),
   "chipsAsOf": zod.string().nullish().describe('三大法人買賣超資料的最後日期（YYYY-MM-DD）'),
   "revenueAsOf": zod.string().nullish().describe('最近一筆月營收所屬年月（YYYY\/MM）。 與股價、法人各自獨立顯示 —— 三個來源的最新日期不一定相同， 合併成單一「更新時間」會蓋掉這個差異。')
+})
+
+
+/**
+ * 毛利率、營益率、ROE、負債比與自由現金流的多季趨勢。刻意不放進 /stock/{code} 的主流程：那裡已有六個 FinMind 請求，再加三張報表 就是一次分析 27~45 個請求，尖峰會直接打到首次查詢。只有價值與 存股兩個視圖需要，由前端在切到那些視圖時才請求。 抓取失敗時回傳空的 quarters 而非 500 —— 個股其餘部分不受影響。
+ * @summary 財報三表衍生的品質比率（延後載入）
+ */
+export const StockFundamentalsParams = zod.object({
+  "code": zod.coerce.string().describe('台股股票代號（如：2330）')
+})
+
+export const StockFundamentalsResponse = zod.object({
+  "quarters": zod.array(zod.object({
+  "date": zod.string(),
+  "grossMargin": zod.number().nullish(),
+  "operatingMargin": zod.number().nullish(),
+  "netMargin": zod.number().nullish(),
+  "eps": zod.number().nullish(),
+  "roe": zod.number().nullish().describe('股東權益報酬率（%）。單季值，非年化 —— 畫面必須標明。'),
+  "debtRatio": zod.number().nullish(),
+  "fcf": zod.number().nullish().describe('自由現金流 = 營運現金流 − 資本支出')
+})).describe('由新到舊'),
+  "asOf": zod.string().nullish().describe('最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。')
 })
 
 

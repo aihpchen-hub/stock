@@ -166,6 +166,59 @@ export interface MarketContext {
   asOf?: string | null;
 }
 
+export interface MetricBand {
+  current?: number | null;
+  /** 目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。 */
+  percentile?: number | null;
+  low?: number | null;
+  median?: number | null;
+  high?: number | null;
+  /** 實際參與計算的樣本數，讓畫面能標明區間的可信度 */
+  samples: number;
+}
+
+export interface Valuation {
+  per: MetricBand;
+  pbr: MetricBand;
+  dividendYield: MetricBand;
+  asOf?: string | null;
+}
+
+export interface DividendSummary {
+  /** 從最新年度往回數的連續配息年數。不是「有配息的年數」—— 實測 2412 中華電 2009 年缺席，總年數 21 但連續只有 17。 */
+  consecutiveYears: number;
+  latestYear?: string | null;
+  /** 最近一個有配息年度的現金股利合計（季配會有多筆） */
+  latestCash?: number | null;
+  avgCash5y?: number | null;
+  /** 資料涵蓋的最早年度。文案只能寫「N 年起」，不得宣稱完整歷史。 */
+  coverageFrom?: string | null;
+  /** 填息成功次數 */
+  filled: number;
+  /** 可判定的除息次數（缺價位者不計） */
+  filledTotal: number;
+}
+
+export interface QuarterMetrics {
+  date: string;
+  grossMargin?: number | null;
+  operatingMargin?: number | null;
+  netMargin?: number | null;
+  eps?: number | null;
+  /** 股東權益報酬率（%）。單季值，非年化 —— 畫面必須標明。 */
+  roe?: number | null;
+  debtRatio?: number | null;
+  /** 自由現金流 = 營運現金流 − 資本支出 */
+  fcf?: number | null;
+}
+
+export interface Financials {
+  /** 由新到舊 */
+  quarters: QuarterMetrics[];
+  /** 最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。 */
+  asOf?: string | null;
+}
+
 export interface OutcomeTally {
   target: number;
   stop: number;
@@ -545,6 +598,8 @@ export interface StockDetailResult {
   relativeStrength?: Returns | null;
   /** 當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。 */
   market?: MarketContext | null;
+  valuation?: Valuation;
+  dividend?: DividendSummary;
   /** 外資30日淨買超相當於幾日平均成交量 */
   foreignNetDays?: number | null;
   /** 投信30日淨買超相當於幾日平均成交量 */

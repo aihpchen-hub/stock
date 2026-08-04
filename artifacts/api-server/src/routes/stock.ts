@@ -27,6 +27,8 @@ import {
   buildReturns,
   type MarketContext,
 } from "../lib/market";
+import { buildValuation, type PerRow } from "../lib/valuation";
+import { buildDividend, type DividendResultRow, type DividendRow } from "../lib/dividend";
 
 const router = Router();
 
@@ -142,7 +144,21 @@ router.get("/stock/:code", async (req, res) => {
     //
     // 150 個日曆日 ≈ 102 個交易日。原本的 100 日只有約 68 個交易日，MA60 僅多 8 根，
     // 遇到連假或暫停交易就可能算不出來。
-    const [prices, revenues, institutionals, info, market] = await Promise.all([
+    // 估值走五年日頻（約 1,461 筆），股利拉滿全部歷史 —— 連續配息年數
+    // 必須看得到最早的斷層才算得對。這三個資料集格式扁平、直接可用，
+    // 因此併入主流程；財報三表是長格式且季頻，走獨立端點延後載入。
+    const VALUATION_FETCH_DAYS = 1830;
+
+    const [
+      prices,
+      revenues,
+      institutionals,
+      info,
+      market,
+      perRows,
+      dividendRows,
+      dividendResults,
+    ] = await Promise.all([
       fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(PRICE_FETCH_DAYS), token)),
       fetchFinMind<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
       fetchFinMind<InstitutionalRow>(
@@ -151,6 +167,13 @@ router.get("/stock/:code", async (req, res) => {
       resolveStock(code),
       // 與個股平行抓，不佔用額外的往返時間；命中日快取時完全不發請求
       getMarketContext(day, token),
+      fetchFinMind<PerRow>(
+        buildUrl("TaiwanStockPER", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
+      ),
+      fetchFinMind<DividendRow>(buildUrl("TaiwanStockDividend", code, "1990-01-01", token)),
+      fetchFinMind<DividendResultRow>(
+        buildUrl("TaiwanStockDividendResult", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
+      ),
     ]);
 
     // ── Price / MA ─────────────────────────────────────────────────────────
@@ -382,6 +405,10 @@ router.get("/stock/:code", async (req, res) => {
       // 相對大盤。null 代表當日抓不到加權指數，畫面整塊不渲染。
       relativeStrength: market ? buildRelativeStrength(buildReturns(closes), market) : null,
       market,
+      // 估值只放統計結果，不放 1,461 筆原始序列 —— 那會讓五檔的回應
+      // 多出約 675 KB，而它還要進 localStorage 快照。
+      valuation: buildValuation(perRows),
+      dividend: buildDividend(dividendRows, dividendResults),
       // Net flow expressed in days of average volume — "+91 lots" means nothing
       // without knowing whether the stock trades 100 or 100,000 lots a day.
       foreignNetDays:

@@ -69,7 +69,17 @@ export function analysisCacheKey(keyword: string, period: string): string {
  * 改版時遞增此處的版本號即可讓舊項目自然失效。
  */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|v5|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v6|${code.trim().toLowerCase()}|${period}`;
+}
+
+/**
+ * 財報資料的快取鍵。
+ *
+ * 不帶週期：財報與使用者選的持有期無關。仍以日失效即可 —— 財報是季頻，
+ * 多抓幾次無妨；少抓才是問題（發布當天拿到舊資料）。
+ */
+export function fundamentalsCacheKey(code: string): string {
+  return `fundamentals|v1|${code.trim().toLowerCase()}`;
 }
 
 /**

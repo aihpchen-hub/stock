@@ -22,6 +22,7 @@ import type {
 import type {
   AnalyzeRequest,
   AnalyzeResult,
+  Financials,
   HealthStatus,
   StockDetailParams,
   StockDetailResult,
@@ -284,6 +285,84 @@ export function useStockDetail<TData = Awaited<ReturnType<typeof stockDetail>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getStockDetailQueryOptions(code,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getStockFundamentalsUrl = (code: string,) => {
+
+
+
+
+  return `/api/stock/${code}/fundamentals`
+}
+
+/**
+ * 毛利率、營益率、ROE、負債比與自由現金流的多季趨勢。刻意不放進 /stock/{code} 的主流程：那裡已有六個 FinMind 請求，再加三張報表 就是一次分析 27~45 個請求，尖峰會直接打到首次查詢。只有價值與 存股兩個視圖需要，由前端在切到那些視圖時才請求。 抓取失敗時回傳空的 quarters 而非 500 —— 個股其餘部分不受影響。
+ * @summary 財報三表衍生的品質比率（延後載入）
+ */
+export const stockFundamentals = async (code: string, options?: RequestInit): Promise<Financials> => {
+
+  return customFetch<Financials>(getStockFundamentalsUrl(code),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getStockFundamentalsQueryKey = (code: string,) => {
+    return [
+    `/api/stock/${code}/fundamentals`
+    ] as const;
+    }
+
+
+export const getStockFundamentalsQueryOptions = <TData = Awaited<ReturnType<typeof stockFundamentals>>, TError = ErrorType<unknown>>(code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof stockFundamentals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getStockFundamentalsQueryKey(code);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof stockFundamentals>>> = ({ signal }) => stockFundamentals(code, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: code !== null && code !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof stockFundamentals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type StockFundamentalsQueryResult = NonNullable<Awaited<ReturnType<typeof stockFundamentals>>>
+export type StockFundamentalsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary 財報三表衍生的品質比率（延後載入）
+ */
+
+export function useStockFundamentals<TData = Awaited<ReturnType<typeof stockFundamentals>>, TError = ErrorType<unknown>>(
+ code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof stockFundamentals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getStockFundamentalsQueryOptions(code,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
