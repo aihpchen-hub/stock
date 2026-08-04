@@ -323,44 +323,39 @@ export function StockCard({ stock, detail, loading, settings }: StockCardProps) 
                   </div>
                 </div>
                 
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    風報比:{' '}
-                    <strong
-                      className={
-                        riskRewardRatio != null && riskRewardRatio < 1
-                          ? 'text-destructive'
-                          : 'text-foreground'
-                      }
-                    >
-                      {riskRewardRatio?.toFixed(2)}
-                    </strong>
-                  </span>
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    單張最大虧損: <strong className="text-destructive font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
-                  </span>
-                </div>
-
-                {/* 後端的 riskRewardRatio 是毛值，用的是價差。實際下單要付
-                    兩趟手續費與一趟證交稅，賠率因此一定比毛值差 —— 而畫面
-                    先前只印毛值，等於系統性地把每一筆交易講得比實際好。
-                    低價股尤其明顯：手續費有 20 元低收，價差被固定成本吃掉的
-                    比例遠高於高價股。 */}
+                {/* 扣費後才是實際到手的賠率，因此排在前面。毛值是價差算出來的，
+                    而下單要付兩趟手續費與一趟證交稅 —— 先印毛值等於系統性地
+                    把每一筆交易講得比實際好。低價股尤其明顯：手續費有 20 元低收，
+                    價差被固定成本吃掉的比例遠高於高價股。 */}
                 {netRiskReward != null && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      扣費後風報比:{' '}
+                      風報比（扣費後）:{' '}
                       <strong className={netRiskReward < 1 ? 'text-destructive' : 'text-foreground'}>
                         {netRiskReward.toFixed(2)}
                       </strong>
                     </span>
                     <span className="text-muted-foreground flex items-center gap-1">
-                      單張淨獲利:{' '}
-                      <strong className="text-primary font-mono">
-                        NT$ {economics.netRewardPerLot.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                      </strong>
+                      單張最大虧損: <strong className="text-destructive font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
                     </span>
                   </div>
+                )}
+
+                {/* 毛值保留的價值是「對照」，不是主指標 —— 它讓使用者看得出
+                    成本吃掉了多少。放進展開區，預設不與扣費後的數字並排競爭：
+                    實測十檔有四檔兩者跨越 1.0，並排時使用者會同時看到
+                    「賠率有利」與「賠率不利」兩個結論。 */}
+                {riskRewardRatio != null && (
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer select-none">未扣費用的帳面數字</summary>
+                    <div className="mt-1 space-y-0.5 font-mono">
+                      <div>帳面風報比：{riskRewardRatio.toFixed(2)}（以價差計算，未計手續費與證交稅）</div>
+                      <div>
+                        單張淨獲利：NT${' '}
+                        {economics.netRewardPerLot.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+                  </details>
                 )}
 
                 {/* 賠率警示以**扣費後**的比值為準，不是毛值。
