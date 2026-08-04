@@ -12,6 +12,20 @@ import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
 import { latestFor, loadVerify } from '@/lib/verifyStore';
 import { rankByStrength } from '@/lib/groupStrength';
+import { ProfileSwitcher } from '@/components/profile-switcher';
+import { DEFAULT_PROFILE, VIEW_CONFIG, type ViewProfile } from '@workspace/view-profile';
+
+const PROFILE_KEY = 'view_profile_v1';
+
+/** 記住上次選的受眾。認不得的值退回預設，不讓一個舊字串把畫面弄壞 */
+function loadProfile(): ViewProfile {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw && raw in VIEW_CONFIG ? (raw as ViewProfile) : DEFAULT_PROFILE;
+  } catch {
+    return DEFAULT_PROFILE;
+  }
+}
 import { useSettings } from '@/hooks/use-settings';
 import { StockCard } from '@/components/stock-card';
 import { ArrowLeft, Loader2, Newspaper, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -94,6 +108,17 @@ export default function Analysis() {
   // 驗證結果只在掛載時讀一次 —— 它是使用者在首頁跑出來的，本頁不會改變它，
   // 沒有理由每次 render 都重新解析一遍 localStorage。
   const verifySummaries = useMemo(() => loadVerify(), []);
+
+  // 受眾切換完全在前端 —— 不重新請求、不重算任何數字，只換呈現方式
+  const [profile, setProfile] = useState<ViewProfile>(loadProfile);
+  const changeProfile = (next: ViewProfile) => {
+    setProfile(next);
+    try {
+      localStorage.setItem(PROFILE_KEY, next);
+    } catch {
+      // 隱私模式存不下就算了，這一輪的切換仍然有效
+    }
+  };
 
   // 族群排名用同一批已載入的明細算，不發任何請求
   const groupRanks = useMemo(
@@ -273,7 +298,10 @@ export default function Analysis() {
 
           {/* Stock Cards */}
           <section className="space-y-6">
-            <h2 className="text-xl font-bold">供應鏈標的詳情</h2>
+            <div className="space-y-3">
+              <h2 className="text-xl font-bold">供應鏈標的詳情</h2>
+              <ProfileSwitcher profile={profile} onChange={changeProfile} />
+            </div>
             <div className="grid gap-6">
               {sortedStocks.map((stock, i) => {
                 const detail = derivedStockDetails[stock.code];
@@ -291,6 +319,7 @@ export default function Analysis() {
                         : null
                     }
                     groupRank={groupRanks[stock.code] ?? null}
+                    profile={profile}
                   />
                 );
               })}

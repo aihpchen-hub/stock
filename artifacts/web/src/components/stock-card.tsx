@@ -12,6 +12,12 @@ import { strategyFor } from '@/lib/strategy';
 import type { StoredVerify } from '@/lib/verifyStore';
 import { MarketPanel } from '@/components/stock/market-panel';
 import type { GroupRank } from '@/lib/groupStrength';
+import {
+  DividendPanel,
+  FinancialsPanel,
+  ValuationPanel,
+} from '@/components/stock/valuation-panel';
+import { maSignalText, viewFor, type ViewProfile } from '@workspace/view-profile';
 
 interface StockCardProps {
   stock: StockInfo;
@@ -22,6 +28,8 @@ interface StockCardProps {
   verified?: StoredVerify | null;
   /** 同一條供應鏈內的相對強弱排名。null 代表無可比對象 */
   groupRank?: GroupRank | null;
+  /** 受眾視圖。決定顯示哪些區塊，不改變任何數字 */
+  profile?: ViewProfile;
 }
 
 export function StockCard({
@@ -31,7 +39,11 @@ export function StockCard({
   settings,
   verified,
   groupRank,
+  profile,
 }: StockCardProps) {
+  const view = viewFor(profile);
+  const shows = (section: Parameters<typeof view.show.includes>[0]) =>
+    view.show.includes(section);
   if (loading || !detail) {
     return (
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm animate-pulse space-y-4">
@@ -84,6 +96,8 @@ export function StockCard({
     returns,
     relativeStrength,
     market,
+    valuation,
+    dividend,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -209,20 +223,22 @@ export function StockCard({
       <div className="p-5 grid md:grid-cols-2 gap-6 border-b border-border">
         {/* EV Result */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground font-medium">加權期望值 E(V)</span>
-            {ev != null && (
-              <span className={`text-3xl font-black font-mono ${ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                {ev > 0 ? '+' : ''}{ev.toFixed(2)}%
-              </span>
-            )}
-          </div>
-          
+          {shows('expected_value') && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground font-medium">加權期望值 E(V)</span>
+              {ev != null && (
+                <span className={`text-3xl font-black font-mono ${ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                  {ev > 0 ? '+' : ''}{ev.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
+
           {/* 實際達標率印在 E(V) 正下方。E(V) 是由一張未經回測的機率表算出來的
               （README「判斷層與計算層分開陳述」那一節有標示），而前瞻驗證是唯一
               能校正那個印象的東西 —— 它先前只出現在首頁，等於把宣稱與檢驗
               放在兩個不同的畫面上。 */}
-          {verified?.tally.targetRate != null && (
+          {shows('verified_rate') && verified?.tally.targetRate != null && (
             <div className="text-xs bg-muted/40 border border-border rounded px-2 py-1.5 leading-relaxed">
               <span className="text-muted-foreground">這套規則（v{verified.ruleVersion}）目前實測：</span>
               <span className="font-bold text-foreground"> 達標率 {verified.tally.targetRate.toFixed(1)}%</span>
@@ -235,51 +251,80 @@ export function StockCard({
             </div>
           )}
 
-          <div className="space-y-2">
-            <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
-            <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
-            <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
-          </div>
+          {/* 三情境機率是新手最容易誤讀的東西：「多頭 55%」會被讀成
+              「有 55% 機率會賺」，而視覺化強化了那個誤讀。 */}
+          {shows('expected_value') && (
+            <div className="space-y-2">
+              <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
+              <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
+              <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
+            </div>
+          )}
+
+          {/* 估值三塊只有價值與存股視圖看得到。財報走延後載入 ——
+              只有真的切到那些視圖時才發請求。 */}
+          {shows('valuation') && <ValuationPanel valuation={valuation} />}
+          {shows('dividend') && <DividendPanel dividend={dividend} />}
+          {shows('financials') && <FinancialsPanel code={code} enabled={shows('financials')} />}
         </div>
 
         {/* Financial Metrics */}
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <MetricCard label="MA 位置" value={formatMaSignal(maSignal)} />
-            <MetricCard
-              label="月營收 YoY"
-              value={revenueYoY != null ? `${revenueYoY > 0 ? '+' : ''}${revenueYoY.toFixed(1)}%` : '-'}
-              isPositive={revenueYoY ? revenueYoY > 0 : undefined}
-            />
+            {/* 新手視圖用白話文講同一個判斷 —— 只換用詞，不改判斷本身 */}
+            {shows('ma_position') && (
+              <MetricCard label="均線位置" value={maSignalText(maSignal, view.glossary)} />
+            )}
+            {shows('monthly_yoy') && (
+              <MetricCard
+                label="月營收 YoY"
+                value={revenueYoY != null ? `${revenueYoY > 0 ? '+' : ''}${revenueYoY.toFixed(1)}%` : '-'}
+                isPositive={revenueYoY ? revenueYoY > 0 : undefined}
+              />
+            )}
             {/* 20 日均量後端一直有算，只是從來沒顯示。缺了它，一張再漂亮的計畫
                 也看不出掛不掛得進去 —— 小型股的流動性是能不能成交的前提。
                 有量能剖面時改顯示當日量與倍數：只給均量回答不了
                 「今天的量算不算異常」。 */}
-            {volume ? (
-              <MetricCard
-                label={`當日量（均量 ${formatVolumeRatio(volume.ratio)}）`}
-                value={formatVolume(volume.latest)}
-                isPositive={volume.kind === 'surge' ? true : undefined}
-              />
-            ) : (
-              <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
-            )}
+            {shows('volume') &&
+              (volume ? (
+                <MetricCard
+                  label={`當日量（均量 ${formatVolumeRatio(volume.ratio)}）`}
+                  value={formatVolume(volume.latest)}
+                  isPositive={volume.kind === 'surge' ? true : undefined}
+                />
+              ) : (
+                <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+              ))}
             {/* 舊快照沒有 chips 欄位，退回原本的單一累積數字。
                 這裡的天期標示刻意寫「約24日」而非「30日」—— 舊資料抓的是
                 35 個日曆日，從來就不是 30 個交易日。 */}
-            {!chips && <MetricCard label="外資（約24日）" value={formatInstitutional(foreignNet30d)} />}
-            {!chips && <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />}
+            {shows('chips') && !chips && (
+              <MetricCard label="外資（約24日）" value={formatInstitutional(foreignNet30d)} />
+            )}
+            {shows('chips') && !chips && (
+              <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />
+            )}
           </div>
           {/* 相對強弱排在籌碼之前：它回答的是「這檔到底強不強」，
               而籌碼是解釋強弱成因的其中一個面向。 */}
-          <MarketPanel
-            returns={returns}
-            relativeStrength={relativeStrength}
-            market={market}
-            groupRank={groupRank}
-          />
-          {chips && <ChipsPanel chips={chips} chipsAsOf={chipsAsOf} />}
-          <SignalList signals={signals} trend={trend} trendBasis={trendBasis} />
+          {shows('market_strength') && (
+            <MarketPanel
+              returns={returns}
+              relativeStrength={relativeStrength}
+              market={market}
+              groupRank={groupRank}
+            />
+          )}
+          {shows('chips') && chips && <ChipsPanel chips={chips} chipsAsOf={chipsAsOf} />}
+          {shows('signals') && (
+            <SignalList
+              signals={signals}
+              trend={trend}
+              trendBasis={shows('signal_details') ? trendBasis : undefined}
+              showDetails={shows('signal_details')}
+            />
+          )}
         </div>
       </div>
 
@@ -296,12 +341,17 @@ export function StockCard({
 
         {/* 摘要由已算出的欄位模板組句，不呼叫模型 —— 因此永遠不會與
             下方的數字牴觸。模型敘述做不到這一點，而它就印在數字旁邊。 */}
-        {narrative && (
+        {shows('narrative') && narrative && (
           <p className="text-sm leading-relaxed text-foreground/90 bg-muted/30 border border-border rounded-lg p-3">
             {narrative}
           </p>
         )}
 
+        {/* 整個交易計畫區塊只在會用到它的視圖顯示。價值與存股看不到 ——
+            停損停利與長期持有邏輯牴觸：那兩種投資人的賣出條件是基本面
+            轉壞或估值過高，不是價格觸及某個數字。 */}
+        {shows('trading_plan') && (
+          <>
         <h4 className="text-sm font-bold text-muted-foreground flex items-center gap-2">
           <Target className="w-4 h-4" />
           {/* 區間在現價之上時那組價位講的是「假如站回月線之後」，
@@ -352,7 +402,7 @@ export function StockCard({
             </div>
 
             {/* Position Sizing */}
-            {position && economics && (
+            {shows('position_sizing') && position && economics && (
               <div className="bg-card border border-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center border-b border-border pb-3">
                   <div>
@@ -483,32 +533,38 @@ export function StockCard({
               </div>
             )}
 
-            {/* Extra notes */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              {firstTarget && (
-                <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
-                  第一目標 (1R): <strong className="font-mono text-foreground">{firstTarget}</strong>
-                </div>
-              )}
-              {trailingStop && (
-                <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
-                  移動停損起始: <strong className="font-mono text-foreground">{trailingStop}</strong>
-                </div>
-              )}
-            </div>
+            {/* Extra notes —— 1R 與移動停損是進階術語，新手視圖不顯示 */}
+            {shows('trailing_stop') && (
+              <div className="flex flex-wrap gap-2 text-xs">
+                {firstTarget && (
+                  <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
+                    第一目標 (1R): <strong className="font-mono text-foreground">{firstTarget}</strong>
+                  </div>
+                )}
+                {trailingStop && (
+                  <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
+                    移動停損起始: <strong className="font-mono text-foreground">{trailingStop}</strong>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 計畫在什麼情況下不再成立。少了這塊，使用者只知道什麼時候該買，
                 不知道什麼時候該承認這次判斷錯了 —— 而後者才是真正會虧錢的那一半。 */}
-            <div className="border-l-2 border-border pl-3 space-y-1 text-xs text-muted-foreground">
-              <div className="font-bold text-foreground/80">這份計畫何時失效</div>
-              <div>{effectiveInvalidation.priceReason}</div>
-              <div>{effectiveInvalidation.expiryReason}</div>
-            </div>
+            {shows('invalidation') && (
+              <div className="border-l-2 border-border pl-3 space-y-1 text-xs text-muted-foreground">
+                <div className="font-bold text-foreground/80">這份計畫何時失效</div>
+                <div>{effectiveInvalidation.priceReason}</div>
+                <div>{effectiveInvalidation.expiryReason}</div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-6 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
             無足夠數據生成完整交易計畫
           </div>
+        )}
+          </>
         )}
       </div>
     </div>

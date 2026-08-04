@@ -20,6 +20,13 @@ interface SignalListProps {
   signals?: Signal[];
   trend?: Trend;
   trendBasis?: string;
+  /**
+   * 是否顯示各項訊號的計算值。
+   *
+   * 新手視圖關掉：那一段是等寬字的原始數值，寫給會驗算的人看的。
+   * 預設為 true —— 既有呼叫端不傳這個 prop 時行為不變。
+   */
+  showDetails?: boolean;
 }
 
 /**
@@ -32,7 +39,7 @@ interface SignalListProps {
  * 這些訊號**不進入評分**。評分本來就是未經回測的經驗設定，
  * 再塞進五個同樣未驗證的權重只會讓它更難歸因。
  */
-export function SignalList({ signals, trend, trendBasis }: SignalListProps) {
+export function SignalList({ signals, trend, trendBasis, showDetails = true }: SignalListProps) {
   // 舊快照沒有這兩個欄位。整塊不渲染，不顯示半截狀態。
   if (!signals && !trend) return null;
 
@@ -76,7 +83,7 @@ export function SignalList({ signals, trend, trendBasis }: SignalListProps) {
         <p className="text-xs text-muted-foreground">目前沒有任何訊號條件成立</p>
       )}
 
-      {signals && signals.length > 0 && (
+      {showDetails && signals && signals.length > 0 && (
         <details className="text-xs text-muted-foreground">
           <summary className="cursor-pointer select-none">各項訊號的計算值</summary>
           <ul className="mt-1 space-y-0.5 font-mono">
