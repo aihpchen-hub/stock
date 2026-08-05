@@ -1,5 +1,5 @@
 import React from 'react';
-import { buildPriceMap, type PriceMapInput, type PriceMapKey } from '@/lib/priceMap';
+import { buildPriceMap, priceMapNote, type PriceMapInput, type PriceMapKey } from '@/lib/priceMap';
 
 /**
  * 價位地圖。
@@ -44,12 +44,20 @@ export function PriceMap(input: PriceMapInput) {
 
   const entryLow = levels.find((l) => l.key === 'entry_low');
   const entryHigh = levels.find((l) => l.key === 'entry_high');
+  const note = priceMapNote(input.planKind);
+  const pending = input.planKind === 'conditional';
 
   return (
     <div className="bg-muted/30 border border-border rounded-lg p-3 space-y-2">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs text-muted-foreground">價位地圖</span>
-        <span className="text-[10px] text-muted-foreground/70">依真實比例</span>
+        {/* 計畫尚未成立時，這個標記與底下的注記是使用者唯一的提醒 ——
+            少了它，一條畫得好好的進場帶看起來就像現在能用 */}
+        {pending ? (
+          <span className="text-[10px] text-amber-500 font-medium">計畫尚未成立</span>
+        ) : (
+          <span className="text-[10px] text-muted-foreground/70">依真實比例</span>
+        )}
       </div>
 
       {/* 外層的上下留白不是裝飾：標籤用 translateY(50%) 對齊刻度，
@@ -60,7 +68,11 @@ export function PriceMap(input: PriceMapInput) {
           {/* 進場區畫成色帶而非兩條線 —— 它是一段可以進場的範圍，不是兩個價位 */}
           {entryLow && entryHigh && entryHigh.pct > entryLow.pct && (
             <div
-              className="absolute left-0 w-[42%] bg-primary/10 border-y border-primary/30 rounded-sm"
+              className={`absolute left-0 w-[42%] rounded-sm border-y ${
+                pending
+                  ? 'bg-amber-500/5 border-dashed border-amber-500/40'
+                  : 'bg-primary/10 border-primary/30'
+              }`}
               style={{ bottom: `${entryLow.pct}%`, height: `${entryHigh.pct - entryLow.pct}%` }}
             />
           )}
@@ -107,10 +119,13 @@ export function PriceMap(input: PriceMapInput) {
         </div>
       </div>
 
-      {/* 計畫價位被抑制時要說出來，否則使用者會以為這檔沒有停損停利可算 */}
-      {input.planKind === 'none' && (
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          僅顯示現價與均線位置 —— 進場區與停損停利的前提不成立，見上方操作建議。
+      {note && (
+        <p
+          className={`text-[10px] leading-relaxed ${
+            pending ? 'text-amber-500/90' : 'text-muted-foreground'
+          }`}
+        >
+          {note}
         </p>
       )}
     </div>

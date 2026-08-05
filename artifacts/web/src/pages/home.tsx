@@ -133,7 +133,7 @@ export default function Home() {
           <input
             type="text"
             className="w-full bg-background border border-input rounded-xl py-4 pl-12 pr-4 text-lg focus:outline-none focus:ring-2 focus:ring-primary transition-all placeholder:text-muted-foreground/50"
-            placeholder="輸入產業關鍵字 (例如: AI水冷散熱)..."
+            placeholder="產業關鍵字或股票代號 (例如: AI水冷散熱、2330)..."
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -144,6 +144,13 @@ export default function Home() {
             分析
           </button>
         </form>
+
+        {/* 個股查詢的整套後端邏輯（代號解析、專屬 prompt、同族群比較）早就存在，
+            但畫面上沒有一個字提過 —— 使用者只會照 placeholder 輸入產業關鍵字，
+            永遠不會發現這條路。 */}
+        <p className="text-sm text-muted-foreground">
+          輸入四到六位數的股票代號，會直接分析該檔並找出同族群競爭者一起比較。
+        </p>
 
         <div className="flex flex-wrap gap-2">
           {CHIPS.map(chip => (
@@ -350,15 +357,24 @@ function HistoryGroup({ keyword, items, onRemove }: { keyword: string, items: Hi
   const [expanded, setExpanded] = useState(false);
   const [, setLocation] = useLocation();
 
+  // 同一組的關鍵字相同，查詢標的自然也相同 —— 取任一筆有記錄的即可。
+  // 舊紀錄沒有這個欄位，那時就只顯示關鍵字本身。
+  const queriedName = items.find((i) => i.queriedName)?.queriedName ?? null;
+
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {expanded ? <ChevronDown className="w-5 h-5 text-muted-foreground" /> : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
           <span className="text-lg font-bold">{keyword}</span>
+          {/* 查個股時關鍵字是一串數字。少了公司名，三天後回頭看只有代號，
+              而列裡最顯眼的名字是「領先標的」—— 那通常不是查的那一檔 */}
+          {queriedName && (
+            <span className="text-lg font-bold text-accent">{queriedName}</span>
+          )}
           <span className="text-sm bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{items.length} 筆紀錄</span>
         </div>
       </button>

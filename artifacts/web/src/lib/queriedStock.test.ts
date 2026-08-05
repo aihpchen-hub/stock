@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { queriedCode } from './queriedStock';
+import { queriedCode, queriedIdentity } from './queriedStock';
 
 const STOCKS = [
   { code: '6274', name: '台燿' },
@@ -41,5 +41,40 @@ describe('queriedCode', () => {
     expect(queriedCode('', STOCKS)).toBeNull();
     expect(queriedCode('   ', STOCKS)).toBeNull();
     expect(queriedCode('5439', [])).toBeNull();
+  });
+});
+
+describe('queriedIdentity', () => {
+  const DETAILS = {
+    '5439': { stockName: '高技', officialIndustry: '電子零組件業' },
+  };
+
+  it('官方簡稱與官方產業別優先 —— 那是唯一可查核的來源', () => {
+    expect(queriedIdentity('5439', STOCKS, DETAILS)).toEqual({
+      code: '5439',
+      name: '高技',
+      industry: '電子零組件業',
+    });
+  });
+
+  it('明細還沒載入時退回模型給的名稱，不讓標題空一塊', () => {
+    expect(queriedIdentity('5439', STOCKS, {})).toEqual({
+      code: '5439',
+      name: '高技',
+      industry: null,
+    });
+  });
+
+  it('官方欄位為 null 時退回模型名稱，產業留 null', () => {
+    const details = { '5439': { stockName: null, officialIndustry: null } };
+    expect(queriedIdentity('5439', STOCKS, details)).toEqual({
+      code: '5439',
+      name: '高技',
+      industry: null,
+    });
+  });
+
+  it('查產業關鍵字時回 null —— 那次查詢沒有「這一檔」', () => {
+    expect(queriedIdentity('AI水冷散熱', STOCKS, DETAILS)).toBeNull();
   });
 });

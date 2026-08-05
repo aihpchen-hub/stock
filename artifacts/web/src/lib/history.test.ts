@@ -16,7 +16,14 @@ import {
 
 beforeEach(() => stub.__reset());
 
-type StockSpec = { code: string; name: string; ev: number | null; price?: number };
+type StockSpec = {
+  code: string;
+  name: string;
+  ev: number | null;
+  price?: number;
+  /** 官方簡稱。未給代表明細裡沒有這個欄位 */
+  stockName?: string;
+};
 
 /** 組一份最小可用的快照；型別由 API client 提供，此處只填測試需要的欄位 */
 function snapshot(id: string, keyword: string, stocks: StockSpec[], createdAt = 1_700_000_000_000) {
@@ -37,7 +44,13 @@ function snapshot(id: string, keyword: string, stocks: StockSpec[], createdAt = 
     stockDetails: Object.fromEntries(
       stocks.map((s) => [
         s.code,
-        { code: s.code, ev: s.ev, evSignal: 'buy', currentPrice: s.price ?? 100 },
+        {
+          code: s.code,
+          ev: s.ev,
+          evSignal: 'buy',
+          currentPrice: s.price ?? 100,
+          ...(s.stockName ? { stockName: s.stockName } : {}),
+        },
       ]),
     ),
   } as unknown as AnalysisSnapshot;
@@ -72,6 +85,37 @@ describe('buildMeta', () => {
     expect(meta.topCode).toBeNull();
     expect(meta.topEv).toBeNull();
     expect(meta.stockCount).toBe(1);
+  });
+
+  // 紀錄列印的是「領先標的」，也就是期望值最高的那檔。查個股時那通常不是
+  // 使用者查的那一檔 —— 查 5439 的紀錄會寫「領先標的: 台燿」，回頭看完全
+  // 認不出這筆是在查什麼。
+  it('查個股時記下查詢標的，用官方簡稱', () => {
+    const meta = buildMeta(
+      snapshot('a', '5439', [
+        { code: '6274', name: '台燿', ev: 21.3 },
+        { code: '5439', name: '高技', ev: -0.6, stockName: '高技' },
+      ]),
+    );
+    expect(meta.queriedCode).toBe('5439');
+    expect(meta.queriedName).toBe('高技');
+    // 領先標的仍然是期望值最高的那檔，兩者各自回答不同的問題
+    expect(meta.topCode).toBe('6274');
+  });
+
+  it('明細缺官方簡稱時退回模型給的名稱', () => {
+    const meta = buildMeta(
+      snapshot('a', '5439', [{ code: '5439', name: '高技', ev: 1.0 }]),
+    );
+    expect(meta.queriedName).toBe('高技');
+  });
+
+  it('查產業關鍵字時兩個欄位都是 null', () => {
+    const meta = buildMeta(
+      snapshot('a', '矽光子', [{ code: '6274', name: '台燿', ev: 21.3 }]),
+    );
+    expect(meta.queriedCode).toBeNull();
+    expect(meta.queriedName).toBeNull();
   });
 });
 

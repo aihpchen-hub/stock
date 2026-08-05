@@ -6,6 +6,8 @@ import type {
   StockDetailResultEvSignal,
 } from '@workspace/api-client-react';
 
+import { queriedIdentity } from './queriedStock';
+
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 // Two-layer design: the list renders from the index alone, so opening the app
 // never parses every stored snapshot.
@@ -39,6 +41,17 @@ export type HistoryMeta = {
   topSignal: StockDetailResultEvSignal | null;
   /** 選用：舊快照建立時尚未記錄此欄，讀回時會是 undefined */
   topPrice?: number | null;
+  /**
+   * 使用者查的那一檔。查產業關鍵字時為 null。
+   *
+   * 與 top* 是兩回事：紀錄列印的「領先標的」是期望值最高的那檔，查 5439 時
+   * 那通常是別人。少了這兩個欄位，一筆「5439」的紀錄旁邊寫著「領先標的:
+   * 台燿」，回頭看認不出這次查的是什麼。
+   *
+   * 選用：舊快照建立時尚未記錄此欄，讀回時會是 undefined。
+   */
+  queriedCode?: string | null;
+  queriedName?: string | null;
 };
 
 function snapshotKey(id: string) {
@@ -69,6 +82,12 @@ export function buildMeta(snapshot: AnalysisSnapshot): HistoryMeta {
     }
   }
 
+  const queried = queriedIdentity(
+    snapshot.keyword,
+    snapshot.analysis.stocks,
+    snapshot.stockDetails,
+  );
+
   return {
     id: snapshot.id,
     createdAt: snapshot.createdAt,
@@ -81,6 +100,8 @@ export function buildMeta(snapshot: AnalysisSnapshot): HistoryMeta {
     topEv,
     topSignal,
     topPrice,
+    queriedCode: queried?.code ?? null,
+    queriedName: queried?.name ?? null,
   };
 }
 

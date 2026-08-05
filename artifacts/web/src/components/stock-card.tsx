@@ -286,6 +286,9 @@ export function StockCard({
           {shows('price_map') && (
             <PriceMap
               planKind={effectiveAdvice.planKind}
+              // 新手視圖右欄把均線翻成白話，地圖不跟上就會在同一張卡片上
+              // 出現兩套詞講同一件事
+              glossary={view.glossary}
               currentPrice={currentPrice}
               entryLow={entryLow}
               entryHigh={entryHigh}

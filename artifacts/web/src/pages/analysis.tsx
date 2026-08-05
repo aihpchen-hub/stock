@@ -12,7 +12,7 @@ import { deriveAdvice } from '@workspace/advice';
 import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/history';
 import { latestFor, loadVerify } from '@/lib/verifyStore';
 import { rankByStrength } from '@/lib/groupStrength';
-import { queriedCode } from '@/lib/queriedStock';
+import { queriedCode, queriedIdentity } from '@/lib/queriedStock';
 import { ProfileSwitcher } from '@/components/profile-switcher';
 import { DEFAULT_PROFILE, VIEW_CONFIG, type ViewProfile } from '@workspace/view-profile';
 
@@ -148,6 +148,13 @@ export default function Analysis() {
     [analysis],
   );
 
+  // 標題要印的完整身分。明細還在載入時退回模型給的名稱，標題不會空一塊
+  const identity = useMemo(
+    () =>
+      analysis ? queriedIdentity(analysis.keyword, analysis.stocks, derivedStockDetails) : null,
+    [analysis, derivedStockDetails],
+  );
+
   // 卡片順序：查的那檔排第一，其餘維持期望值由高到低。
   // 後端的 prompt 早就要求模型把查詢標的放在第一筆，是上面那次重排把它沖走的 ——
   // 查 5439 卻要滑到第四張卡片才找得到自己查的股票。
@@ -219,15 +226,35 @@ export default function Analysis() {
         <>
           {/* Header */}
           <div className="space-y-4">
-            <div className="flex items-center gap-4">
+            {/* 查個股時標題先前只印使用者輸入的字串 —— 整頁最大的字就是「5439」，
+                哪家公司、什麼產業、甚至這是不是個股查詢，一個字都沒有。
+                官方簡稱與官方產業別在明細裡本來就有，只是從未用過。 */}
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl md:text-4xl font-black text-foreground">
-                {analysis.keyword}
+                {identity?.name ?? analysis.keyword}
               </h1>
+              {identity && (
+                <span className="px-2 py-1 bg-background text-muted-foreground rounded-md font-mono text-base border border-border">
+                  {identity.code}
+                </span>
+              )}
+              {identity?.industry && (
+                <span className="px-2 py-1 bg-accent/20 text-accent rounded-md text-sm font-medium border border-accent/20">
+                  {identity.industry}
+                </span>
+              )}
               <span className="px-3 py-1 bg-muted text-muted-foreground rounded-md font-mono text-sm border border-border">
                 {analysis.period}
               </span>
               <SentimentBadge sentiment={analysis.sentiment} />
             </div>
+            {/* 查個股時下方的名單是「這一檔加上同族群競爭者」，不是純產業掃描。
+                不寫出來的話，使用者看到另外三檔會以為系統搞錯了對象。 */}
+            {identity && (
+              <p className="text-sm text-muted-foreground">
+                以「{analysis.keyword}」查詢個股，下方為 {identity.name} 與同族群競爭者的比較。
+              </p>
+            )}
             
             <div className="bg-card border border-border rounded-xl p-6 shadow-sm leading-relaxed text-foreground/90">
               {analysis.summary}
@@ -315,7 +342,8 @@ export default function Analysis() {
                               {isQueried && (
                                 <span className="text-[11px] font-medium bg-primary/15 text-primary px-1.5 py-0.5 rounded border border-primary/30">
                                   你查的
-                                  {rankedRows.length >= 2 && ` · 第 ${i + 1}/${rankedRows.length}`}
+                                  {rankedRows.length >= 2 &&
+                                    ` · 期望值第 ${i + 1}/${rankedRows.length}`}
                                 </span>
                               )}
                             </span>

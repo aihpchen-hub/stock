@@ -24,6 +24,8 @@ export type PriceMapKey =
 
 export interface PriceMapInput {
   planKind: PlanKind;
+  /** 用詞。與 `maSignalText` 同一個開關，預設沿用技術用語 */
+  glossary?: 'plain' | 'technical';
   currentPrice?: number | null;
   entryLow?: number | null;
   entryHigh?: number | null;
@@ -77,6 +79,34 @@ const LABELS: Record<PriceMapKey, string> = {
 };
 
 /**
+ * 新手視圖的用詞。只有均線需要翻譯。
+ *
+ * 停損、停利、20 日高低在新手視圖的其他區塊本來就是這樣寫的（交易計畫、
+ * 停損依據），跟著改反而會讓同一張卡片出現兩套詞 —— 那正是要避免的事。
+ */
+const PLAIN_LABELS: Partial<Record<PriceMapKey, string>> = {
+  ma20: '近月均價',
+  ma60: '近季均價',
+};
+
+/**
+ * 這張圖旁邊要說的話。沒有要說的事時回 null。
+ *
+ * conditional 那一則是必要的：卡片的操作建議寫「站回 X 之上這份計畫才成立」、
+ * 交易計畫標題寫「尚未成立」、欄位寫「成立後進場區」—— 地圖若照畫一條進場帶
+ * 而不出一聲，它會是整張卡片上唯一讓人以為現在就能買的東西。
+ */
+export function priceMapNote(planKind: PlanKind): string | null {
+  if (planKind === 'none') {
+    return '僅顯示現價與均線位置 —— 進場區與停損停利的前提不成立，見上方操作建議。';
+  }
+  if (planKind === 'conditional') {
+    return '進場區與停損停利是站回月線之後才成立的價位，現在還不能照著下單。';
+  }
+  return null;
+}
+
+/**
  * 交易計畫的價位。`planKind` 為 none 時整組不畫。
  *
  * 那個狀態代表現價已跌破停損或資料不足，卡片上的交易計畫區塊已經整塊換成
@@ -126,7 +156,7 @@ export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
     const pct = span === 0 ? 50 : AXIS_PADDING + ((value - min) / span) * (100 - AXIS_PADDING * 2);
     return {
       key,
-      label: LABELS[key],
+      label: (input.glossary === 'plain' ? PLAIN_LABELS[key] : undefined) ?? LABELS[key],
       value,
       pct,
       labelPct: pct,

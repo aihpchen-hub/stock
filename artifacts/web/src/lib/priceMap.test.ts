@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPriceMap, LABEL_MIN_GAP, type PriceMapInput } from './priceMap';
+import { buildPriceMap, LABEL_MIN_GAP, priceMapNote, type PriceMapInput } from './priceMap';
 
 /** 一份價位齊全、計畫成立的輸入 */
 const FULL: PriceMapInput = {
@@ -123,6 +123,47 @@ describe('與現價的距離', () => {
   it('沒有現價時全部不標距離 —— 沒有基準的百分比講不出任何事', () => {
     const levels = buildPriceMap({ planKind: 'immediate', stopLoss: 100, takeProfit: 120 });
     expect(levels.every((l) => l.fromCurrent === null)).toBe(true);
+  });
+});
+
+describe('用詞', () => {
+  const labelOf = (input: PriceMapInput, key: string) =>
+    buildPriceMap(input).find((l) => l.key === key)?.label;
+
+  it('預設沿用技術用語', () => {
+    expect(labelOf(FULL, 'ma20')).toBe('月線');
+    expect(labelOf(FULL, 'ma60')).toBe('季線');
+  });
+
+  it('新手視圖講白話 —— 同一張卡片不該有兩套詞', () => {
+    // 右欄的均線位置在新手視圖被翻成「近月平均」，左欄的地圖若仍寫「月線」，
+    // 讀的人得自己猜那是不是同一件事
+    const plain: PriceMapInput = { ...FULL, glossary: 'plain' };
+    expect(labelOf(plain, 'ma20')).toBe('近月均價');
+    expect(labelOf(plain, 'ma60')).toBe('近季均價');
+  });
+
+  it('停損停利與 20 日高低兩套視圖同名 —— 卡片其他地方本來就這樣寫', () => {
+    const plain: PriceMapInput = { ...FULL, glossary: 'plain' };
+    for (const key of ['stop_loss', 'take_profit', 'swing_low', 'swing_high', 'current']) {
+      expect(labelOf(plain, key)).toBe(labelOf(FULL, key));
+    }
+  });
+});
+
+describe('priceMapNote', () => {
+  it('計畫尚未成立時明講那組價位還不能用', () => {
+    // 卡片其他兩處都寫了「尚未成立」「成立後進場區」，地圖不能是唯一沉默的那個
+    expect(priceMapNote('conditional')).toContain('成立');
+  });
+
+  it('計畫不成立時說明為何只剩現價與均線', () => {
+    expect(priceMapNote('none')).toContain('停損');
+  });
+
+  it('計畫可直接執行時沒有注記，不製造無謂的字', () => {
+    expect(priceMapNote('immediate')).toBeNull();
+    expect(priceMapNote('pullback')).toBeNull();
   });
 });
 

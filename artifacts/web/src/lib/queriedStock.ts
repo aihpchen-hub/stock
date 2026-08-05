@@ -36,3 +36,41 @@ export function queriedCode(
 
   return stocks.find((s) => s.name.trim() === target)?.code ?? null;
 }
+
+export interface QueriedIdentity {
+  code: string;
+  /** 官方簡稱優先，其次模型給的名稱 */
+  name: string;
+  /** 官方產業別。明細尚未載入或缺欄位時為 null */
+  industry: string | null;
+}
+
+interface DetailLike {
+  stockName?: string | null;
+  officialIndustry?: string | null;
+}
+
+/**
+ * 查詢標的的完整身分。
+ *
+ * 分析頁的標題印的是使用者輸入的字串 —— 查 5439 時整頁最大的字就是「5439」，
+ * 沒有公司名、沒有產業，也看不出這是個股查詢還是產業查詢。
+ *
+ * 官方簡稱與官方產業別優先：那是證交所／櫃買中心的資料，是這份回傳裡唯一
+ * 可查核的名稱來源。明細還在載入時退回模型給的名稱，讓標題先有東西可看。
+ */
+export function queriedIdentity(
+  keyword: string,
+  stocks: ReadonlyArray<StockLike>,
+  details: Readonly<Record<string, DetailLike>>,
+): QueriedIdentity | null {
+  const code = queriedCode(keyword, stocks);
+  if (code === null) return null;
+
+  const detail = details[code];
+  return {
+    code,
+    name: detail?.stockName ?? stocks.find((s) => s.code === code)?.name ?? code,
+    industry: detail?.officialIndustry ?? null,
+  };
+}
