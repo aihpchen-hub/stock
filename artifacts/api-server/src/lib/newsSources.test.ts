@@ -4,8 +4,10 @@ import {
   NEWS_DOMAINS,
   countMatches,
   isAllowedNewsUrl,
+  isNewsArticleUrl,
   keywordTerms,
   mentionsTarget,
+  stockNewsQuery,
 } from "./newsSources";
 
 describe("白名單網域", () => {
@@ -43,6 +45,50 @@ describe("白名單網域", () => {
     for (const domain of NEWS_DOMAINS) {
       expect(isAllowedNewsUrl(`https://${domain}/x`)).toBe(true);
     }
+  });
+});
+
+describe("個股新聞查詢字串", () => {
+  it("不帶產業與供應鏈字眼 —— 那是撈不到這檔新聞的原因", () => {
+    // 實測（2026-08-05）：`高技 5439 電子零組件業 台股 供應鏈 競爭對手`
+    // 回傳的六筆全是工商時報「上詮」「燿華」「敬鵬」的搜尋結果頁與 2023 年的
+    // PCB 族群文，一篇提到高技的都沒有；拿掉尾巴那幾個詞後六筆全部命中。
+    const q = stockNewsQuery("高技", "5439");
+    expect(q).toContain("高技");
+    expect(q).toContain("5439");
+    expect(q).not.toContain("供應鏈");
+    expect(q).not.toContain("競爭對手");
+  });
+});
+
+describe("是不是一篇報導", () => {
+  it("放行各家的新聞路徑", () => {
+    const articles = [
+      "https://news.cnyes.com/news/id/6220470",
+      "https://www.ctee.com.tw/news/20260709702066-430502",
+      "https://money.udn.com/money/story/5612/9517107",
+      "https://hk.finance.yahoo.com/news/some-slug-041608459.html",
+      "https://technews.tw/2026/07/09/some-article/",
+    ];
+    for (const url of articles) expect(isNewsArticleUrl(url)).toBe(true);
+  });
+
+  it("擋掉行情頁、總覽頁、統編頁與搜尋結果頁", () => {
+    // 這些網址通過白名單也通過標題比對（標題確實有公司名與代號），
+    // 但它們不是報導 —— 送進模型只會佔掉四個名額之一，
+    // 印在「參考新聞」也只是一個點不出東西的連結。
+    const notArticles = [
+      "https://www.cnyes.com/twstock/1453",
+      "https://www.ctee.com.tw/market-stock/1453",
+      "https://hk.finance.yahoo.com/quote/1453.TW/key-statistics",
+      "https://info.technews.tw/company/07617901-%E5%A4%A7%E5%B0%87",
+      "https://www.ctee.com.tw/search/%E7%B4%A1%E7%B9%94",
+    ];
+    for (const url of notArticles) expect(isNewsArticleUrl(url)).toBe(false);
+  });
+
+  it("解析不了的網址一律不信，與網域判斷同一個立場", () => {
+    expect(isNewsArticleUrl("not a url")).toBe(false);
   });
 });
 

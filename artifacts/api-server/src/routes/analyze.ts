@@ -8,7 +8,9 @@ import {
   NEWS_DOMAINS,
   countMatches,
   isAllowedNewsUrl,
+  isNewsArticleUrl,
   keywordTerms,
+  stockNewsQuery,
 } from "../lib/newsSources";
 import { isStockCode, resolveStock } from "../lib/stockInfo";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -219,9 +221,9 @@ router.post("/analyze", async (req, res) => {
           body: JSON.stringify({
             api_key: tavilyKey,
             // A bare code is hopelessly ambiguous to a web search; always search
-            // by company name once we have it.
+            // by company name once we have it. 查詢字串為何長這樣，見 stockNewsQuery。
             query: resolved
-              ? `${resolved.stock_name} ${resolved.stock_id} ${resolved.industry_category} 台股 供應鏈 競爭對手`
+              ? stockNewsQuery(resolved.stock_name, resolved.stock_id)
               : `${keyword} 台灣 台股 供應鏈 ${new Date().getFullYear()}`,
             search_depth: "basic",
             max_results: 6,
@@ -236,11 +238,22 @@ router.post("/analyze", async (req, res) => {
 
           // 網域白名單：防護網。實測 Tavily 不會越過 include_domains，
           // 但白名單漏設或其行為改變時這一層仍會擋住。
-          const allowed = raw.filter((r) => isAllowedNewsUrl(r.url));
-          if (allowed.length < raw.length) {
+          const onDomain = raw.filter((r) => isAllowedNewsUrl(r.url));
+          if (onDomain.length < raw.length) {
             req.log.warn(
-              { dropped: raw.length - allowed.length, kept: allowed.length },
+              { dropped: raw.length - onDomain.length, kept: onDomain.length },
               "Dropped off-whitelist news results",
+            );
+          }
+
+          // 白名單內仍有一批「不是報導」的頁面：個股總覽、行情、財務統計、
+          // 統一編號、搜尋結果。它們的標題有公司名與代號，會通過下一關的
+          // 相關性比對，然後佔掉四個名額之一並在畫面上變成一個沒有內容的連結。
+          const allowed = onDomain.filter((r) => isNewsArticleUrl(r.url));
+          if (allowed.length < onDomain.length) {
+            req.log.warn(
+              { dropped: onDomain.length - allowed.length, kept: allowed.length },
+              "Dropped non-article pages (quote/profile/search)",
             );
           }
 

@@ -53,6 +53,64 @@ export function isAllowedNewsUrl(url: string): boolean {
 }
 
 /**
+ * 個股新聞的查詢字串。
+ *
+ * **刻意不帶產業類別、「供應鏈」與「競爭對手」。** 先前的查詢是
+ * `${名稱} ${代號} ${產業} 台股 供應鏈 競爭對手`，用意是順便撈出同業，
+ * 實測（2026-08-05）卻是這樣：
+ *
+ * - `高技 5439 電子零組件業 台股 供應鏈 競爭對手` → 六筆全是工商時報
+ *   「上詮」「燿華」「敬鵬」的**搜尋結果頁**與一篇 2023 年的 PCB 族群文，
+ *   沒有一篇提到高技。標題比對於是全數剔除，畫面寫「近期無相關新聞報導」。
+ * - `高技 5439 股價 營運` → 六筆全部命中，其中五篇是真報導
+ *   （6 月營收創新高、Q3 賺回逾半個股本、AI 伺服器高階板放量……）。
+ *
+ * 尾巴那幾個詞的權重壓過了公司名，Tavily 因此回傳整個產業的泛論。
+ * 同業由 prompt negotiate —— 那裡已經給了官方產業類別並要求從中挑 2~4 家，
+ * 不需要靠搜尋字串去湊。
+ *
+ * 也試過 `topic: "news"`：回傳整頁 Palantir、Caterpillar 的美股英文新聞，
+ * 完全無視中文查詢，比現況更糟。
+ */
+export function stockNewsQuery(stockName: string, stockId: string): string {
+  return `${stockName} ${stockId} 股價 營運`;
+}
+
+/**
+ * 這個網址是一篇報導，還是行情頁。
+ *
+ * 個股查詢會撈回一批「標題有公司名與代號、但根本不是新聞」的頁面：
+ * 鉅亨的個股總覽、工商時報的行情頁、Yahoo 的財務統計、TechNews 的統一編號頁、
+ * 以及各家的搜尋結果頁。它們通過網域白名單也通過標題比對，卻佔掉四個名額之一，
+ * 而且印在「參考新聞」時是一個點不出東西的連結。
+ *
+ * 用排除法而非「路徑必須含 /news/」：technews.tw 的報導網址是
+ * `technews.tw/2026/07/09/slug/`，正面表列會把它一起擋掉。
+ * 這裡的錯誤代價不對等 —— 漏擋一個行情頁只是浪費一格，
+ * 誤擋一篇真報導則是把這次分析唯一的依據丟掉。
+ */
+const NON_ARTICLE_PATTERNS = [
+  "/search/",
+  "/quote/",
+  "/twstock/",
+  "/market-stock/",
+  "/company/",
+  "key-statistics",
+] as const;
+
+export function isNewsArticleUrl(url: string): boolean {
+  let path: string;
+  try {
+    const parsed = new URL(url);
+    path = `${parsed.pathname}${parsed.search}`.toLowerCase();
+  } catch {
+    return false; // 解析不了的網址一律不信，與 isAllowedNewsUrl 同一個立場
+  }
+
+  return !NON_ARTICLE_PATTERNS.some((pattern) => path.includes(pattern));
+}
+
+/**
  * 命中的比對詞數量。
  *
  * 純數字的詞（股票代號）必須前後不接數字才算命中：把「8111」當子字串比對時，
