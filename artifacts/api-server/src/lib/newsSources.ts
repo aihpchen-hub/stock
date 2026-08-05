@@ -98,6 +98,41 @@ const NON_ARTICLE_PATTERNS = [
   "key-statistics",
 ] as const;
 
+/**
+ * 網域對讀者認得的媒體名稱。
+ *
+ * 畫面上只印標題時，讀者無從判斷這是自家法說稿、外電轉載，還是券商觀點；
+ * 而白名單裡的六個來源可信度並不相同。
+ */
+const SOURCE_NAMES: Record<string, string> = {
+  "cnyes.com": "鉅亨網",
+  "money.udn.com": "經濟日報",
+  "ctee.com.tw": "工商時報",
+  "technews.tw": "科技新報",
+  "finance.yahoo.com": "Yahoo 財經",
+  "mops.twse.com.tw": "公開資訊觀測站",
+};
+
+/**
+ * 這則新聞出自哪一家。網址解析不了時回 null，由呼叫端決定不顯示。
+ *
+ * 對照不到就回主機名而不是空字串：白名單日後加了新來源卻忘了補這張表時，
+ * 畫面顯示網域仍然可用，不會變成一塊空白。
+ */
+export function newsSourceName(url: string): string | null {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+
+  for (const [domain, name] of Object.entries(SOURCE_NAMES)) {
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) return name;
+  }
+  return hostname;
+}
+
 export function isNewsArticleUrl(url: string): boolean {
   let path: string;
   try {

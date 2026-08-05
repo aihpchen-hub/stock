@@ -7,6 +7,7 @@ import {
   isNewsArticleUrl,
   keywordTerms,
   mentionsTarget,
+  newsSourceName,
   stockNewsQuery,
 } from "./newsSources";
 
@@ -58,6 +59,30 @@ describe("個股新聞查詢字串", () => {
     expect(q).toContain("5439");
     expect(q).not.toContain("供應鏈");
     expect(q).not.toContain("競爭對手");
+  });
+});
+
+describe("出處名稱", () => {
+  it("把網域換成讀者認得的媒體名", () => {
+    expect(newsSourceName("https://news.cnyes.com/news/id/6220470")).toBe("鉅亨網");
+    expect(newsSourceName("https://www.ctee.com.tw/news/20260709702066-430502")).toBe("工商時報");
+    expect(newsSourceName("https://money.udn.com/money/story/5612/9517107")).toBe("經濟日報");
+    expect(newsSourceName("https://technews.tw/2026/07/09/x/")).toBe("科技新報");
+    expect(newsSourceName("https://mops.twse.com.tw/mops/web/t05st01")).toBe("公開資訊觀測站");
+  });
+
+  it("子網域走同一個對照，hk.finance.yahoo.com 與 finance.yahoo.com 同名", () => {
+    expect(newsSourceName("https://hk.finance.yahoo.com/news/a.html")).toBe("Yahoo 財經");
+    expect(newsSourceName("https://finance.yahoo.com/news/a.html")).toBe("Yahoo 財經");
+  });
+
+  it("不在對照表裡就退回主機名，不回空字串", () => {
+    // 白名單日後加了新來源而忘了補對照時，畫面顯示網域仍然可用
+    expect(newsSourceName("https://example.com/a")).toBe("example.com");
+  });
+
+  it("解析不了的網址回 null，由呼叫端決定不顯示", () => {
+    expect(newsSourceName("not a url")).toBeNull();
   });
 });
 

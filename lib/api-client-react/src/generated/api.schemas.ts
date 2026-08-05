@@ -62,6 +62,10 @@ export interface StockInfo {
 export interface NewsItem {
   title: string;
   url: string;
+  /** 讀者認得的媒體名稱（鉅亨網、工商時報…），由網域對照而來。 網址解析不了時為 null。 */
+  source?: string | null;
+  /** 發布日期（YYYY-MM-DD）。由文章頁的 article:published_time 或 ld+json datePublished 讀出 —— Tavily 的一般搜尋不回傳這個欄位。 抓不到時為 null，畫面即不顯示時間，不以查詢時間充數。 */
+  publishedAt?: string | null;
 }
 
 export interface AnalyzeResult {

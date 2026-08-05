@@ -13,6 +13,7 @@ import { loadSnapshot, save, makeSnapshotId, AnalysisSnapshot } from '@/lib/hist
 import { latestFor, loadVerify } from '@/lib/verifyStore';
 import { rankByStrength } from '@/lib/groupStrength';
 import { queriedCode, queriedIdentity } from '@/lib/queriedStock';
+import { newsAge } from '@/lib/newsAge';
 import { ProfileSwitcher } from '@/components/profile-switcher';
 import { DEFAULT_PROFILE, VIEW_CONFIG, type ViewProfile } from '@workspace/view-profile';
 
@@ -240,7 +241,10 @@ export default function Analysis() {
                   {identity.code}
                 </span>
               )}
-              <SentimentBadge sentiment={analysis.sentiment} />
+              {/* 產業情緒徽章不放在這裡 —— 見下方總結區。
+                  它講的是整個產業的題材，貼在公司名旁邊會被讀成「這支股票看多」，
+                  而同一頁的卡片上還有一個由純計算得出的個股訊號可能寫著「觀望偏空」。
+                  兩個判斷各自成立，但擺在一起而不說明它們的對象不同，就是矛盾。 */}
             </div>
             <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-sm text-muted-foreground">
               {identity?.industry && <span>{identity.industry}</span>}
@@ -256,8 +260,24 @@ export default function Analysis() {
               )}
             </div>
             
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm leading-relaxed text-foreground/90">
-              {analysis.summary}
+            {/* 產業情緒歸在產業總結這一塊，並明講它的對象是產業題材。
+                個股自己的訊號（強烈買進／觀望偏空…）在下方卡片上，那是純計算的
+                結果，與這裡的判斷來自不同的層 —— 兩者不一致是常態，不是錯誤。 */}
+            <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-sm font-bold text-muted-foreground">
+                  產業題材{identity ? `（${identity.industry ?? '同族群'}）` : ''}
+                </h2>
+                <SentimentBadge sentiment={analysis.sentiment} />
+              </div>
+              <p className="leading-relaxed text-foreground/90">{analysis.summary}</p>
+              {identity && (
+                <p className="text-xs text-muted-foreground leading-relaxed border-t border-border pt-3">
+                  這是對整個產業題材的看法，不是對 {identity.name} 這一檔的買賣建議。
+                  個股自己的訊號請看下方卡片 —— 那是由營收、均線與法人籌碼算出來的，
+                  與這裡的判斷不一定同方向。
+                </p>
+              )}
             </div>
           </div>
 
@@ -418,22 +438,49 @@ export default function Analysis() {
                 <Newspaper className="w-5 h-5 text-muted-foreground" /> 參考新聞
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
-                {analysis.newsItems.map((news, i) => (
-                  <a 
-                    key={i} 
-                    href={news.url} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="bg-card border border-border hover:border-accent p-4 rounded-xl shadow-sm transition-colors group flex items-start gap-4"
-                  >
-                    <span className="bg-muted text-muted-foreground w-6 h-6 flex items-center justify-center rounded text-xs font-bold shrink-0">
-                      {i + 1}
-                    </span>
-                    <span className="text-sm font-medium group-hover:text-accent transition-colors line-clamp-2">
-                      {news.title}
-                    </span>
-                  </a>
-                ))}
+                {analysis.newsItems.map((news, i) => {
+                  // 一則標題無法自證新舊。實測搜尋結果混進過 2023 年的報導，
+                  // 與當月新聞並排而畫面沒有一個字說明 —— 而分析就建立在它上面。
+                  const age = newsAge(news.publishedAt);
+                  return (
+                    <a
+                      key={i}
+                      href={news.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="bg-card border border-border hover:border-accent p-4 rounded-xl shadow-sm transition-colors group flex items-start gap-4"
+                    >
+                      <span className="bg-muted text-muted-foreground w-6 h-6 flex items-center justify-center rounded text-xs font-bold shrink-0">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 space-y-1.5">
+                        <span className="block text-sm font-medium group-hover:text-accent transition-colors line-clamp-2">
+                          {news.title}
+                        </span>
+                        <span className="flex items-center gap-2 flex-wrap text-xs">
+                          {news.source && (
+                            <span className="text-muted-foreground">{news.source}</span>
+                          )}
+                          {news.source && age && <span className="text-border">·</span>}
+                          {/* 抓不到日期時整個不顯示，不以查詢時間充數 */}
+                          {age && (
+                            <span
+                              className={
+                                age.stale
+                                  ? 'text-amber-500 font-medium'
+                                  : 'text-muted-foreground'
+                              }
+                              title={news.publishedAt ?? undefined}
+                            >
+                              {age.text}
+                              {age.stale && ' ⚠'}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
             </section>
           )}

@@ -45,7 +45,9 @@ export const AnalyzeIndustryResponse = zod.object({
 })).describe('核心供應鏈標的'),
   "newsItems": zod.array(zod.object({
   "title": zod.string(),
-  "url": zod.string()
+  "url": zod.string(),
+  "source": zod.string().nullish().describe('讀者認得的媒體名稱（鉅亨網、工商時報…），由網域對照而來。 網址解析不了時為 null。'),
+  "publishedAt": zod.string().nullish().describe('發布日期（YYYY-MM-DD）。由文章頁的 article:published_time 或 ld+json datePublished 讀出 —— Tavily 的一般搜尋不回傳這個欄位。 抓不到時為 null，畫面即不顯示時間，不以查詢時間充數。')
 })).describe('近期相關新聞')
 })
 

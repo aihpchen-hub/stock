@@ -10,8 +10,10 @@ import {
   isAllowedNewsUrl,
   isNewsArticleUrl,
   keywordTerms,
+  newsSourceName,
   stockNewsQuery,
 } from "../lib/newsSources";
+import { fetchPublishedDates } from "../lib/articleDate";
 import { isStockCode, resolveStock } from "../lib/stockInfo";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -25,7 +27,14 @@ interface AnalyzePayload {
   catalysts: string[];
   catalystDetails: SourcedClaim[];
   stocks: NonNullable<AiAnalysis["stocks"]>;
-  newsItems: Array<{ title: string; url: string }>;
+  newsItems: Array<{
+    title: string;
+    url: string;
+    /** 讀者認得的媒體名稱。網址解析不了時為 null */
+    source: string | null;
+    /** 發布日期 YYYY-MM-DD。抓不到時為 null —— 不猜 */
+    publishedAt: string | null;
+  }>;
 }
 
 /** 同關鍵字同週期同日只打一次外部 API，省下有限的 Gemini 額度 */
@@ -210,7 +219,12 @@ router.post("/analyze", async (req, res) => {
       : keywordTerms(trimmedKeyword);
 
     // ── Step 1: Tavily news search ──────────────────────────────────────────
-    let newsItems: Array<{ title: string; url: string; content: string }> = [];
+    let newsItems: Array<{
+      title: string;
+      url: string;
+      content: string;
+      publishedAt: string | null;
+    }> = [];
 
     const tavilyKey = process.env["TAVILY_API_KEY"];
     if (tavilyKey) {
@@ -279,7 +293,7 @@ router.post("/analyze", async (req, res) => {
           // 只取 5 篇，讓真正談到主題的先佔位，而不是讓泛泛而談的搶走名額
           // 只留 4 篇，而且從此固定這一份：模型看到的編號與畫面顯示的編號必須一致，
           // 否則模型引註第 5 篇時前端沒有第 5 篇可指，那筆出處只能丟掉。
-          newsItems = scored
+          const picked = scored
             .sort((a, b) => b.matches - a.matches || (b.r.score ?? 0) - (a.r.score ?? 0))
             .slice(0, MAX_NEWS_ITEMS)
             .map(({ r }) => ({
@@ -287,6 +301,20 @@ router.post("/analyze", async (req, res) => {
               url: r.url,
               content: r.content?.slice(0, 500) ?? "",
             }));
+
+          // 發布日期只能從文章頁讀 —— Tavily 的一般搜尋不回傳它（見 articleDate）。
+          // 實測查正文 4906 時結果裡混著一篇 2023 年的報導，與今年的新聞並列
+          // 送進模型，畫面上也沒有一個字說明它是舊聞。日期同時給模型與使用者。
+          const dates = await fetchPublishedDates(picked.map((p) => p.url));
+          newsItems = picked.map((p, i) => ({
+            ...p,
+            publishedAt: dates[i]?.publishedAt ?? null,
+          }));
+
+          const undated = newsItems.filter((n) => n.publishedAt === null).length;
+          if (undated > 0) {
+            req.log.info({ undated, total: newsItems.length }, "Some articles have no published date");
+          }
         }
       } catch (searchErr) {
         req.log.warn({ searchErr }, "Tavily search failed, continuing without news");
@@ -298,9 +326,16 @@ router.post("/analyze", async (req, res) => {
       period === "1m" ? "1個月" : period === "3m" ? "3個月" : "6個月";
 
     // 走到這裡的新聞都已通過來源與相關性檢查，不需要再標註可信度
+    // 發布日期寫進 prompt：搜尋結果會混入數年前的報導（實測查正文撈到 2023 年的
+    // 工商時報文章），沒有日期時模型無從分辨那是不是「近期發展」。
     const newsText =
       newsItems.length > 0
-        ? newsItems.map((n, i) => `[${i + 1}] ${n.title}\n${n.content}`).join("\n\n")
+        ? newsItems
+            .map(
+              (n, i) =>
+                `[${i + 1}]${n.publishedAt ? `（發布於 ${n.publishedAt}）` : "（發布日期不明）"} ${n.title}\n${n.content}`,
+            )
+            .join("\n\n")
         : "（未找到近期相關新聞，請依據產業知識與最新市況分析，並在 summary 說明近期無相關報導）";
 
     // When the code resolved, state the ground truth and forbid re-interpretation —
@@ -354,6 +389,7 @@ ${newsText}
 - source 與 reasonSource 只能填上方新聞的編號（1~${newsItems.length || 0}），且該篇新聞必須真的寫到這件事。
 - 若這句話是你依既有知識推論、上方新聞並未提及，**必須填 null**。填一個對不上的編號比填 null 嚴重得多。
 - 寧可多填 null。使用者會看到「模型推論」標記，那是誠實的；填錯編號會讓推論看起來像已查核的事實。
+- 每篇新聞都標了發布日期。距今超過半年的報導不得當作「近期發展」陳述；若催化劑只有舊聞支持，改填 null 並在 summary 說明依據的是較早的報導。
 
 嚴格要求：
 - stocks 必須選 3~5 家，為台灣上市/上櫃公司，聚焦 ${resolved ? `${resolved.stock_name}（${resolved.industry_category}）所處的` : `${keyword} 產業`}核心供應鏈龍頭
@@ -367,7 +403,12 @@ ${newsText}
 
     // 回傳給前端的新聞只取前 4 篇，出處索引必須以「前端看得到的那幾篇」為界，
     // 否則畫面上會出現指向不存在項目的引註。
-    const shownNews = newsItems.map((n) => ({ title: n.title, url: n.url }));
+    const shownNews = newsItems.map((n) => ({
+      title: n.title,
+      url: n.url,
+      source: newsSourceName(n.url),
+      publishedAt: n.publishedAt,
+    }));
     const catalystDetails = normalizeClaims(aiData.catalysts, shownNews.length);
 
     const payload: AnalyzePayload = {
