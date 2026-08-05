@@ -3,7 +3,7 @@ import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
 import { deriveAdvice, deriveInvalidation } from '@workspace/advice';
 import { RiskSettings, planPosition } from '@/lib/settings';
 import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
-import { TrendingUp, AlertTriangle, Info, Target, ShieldAlert, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Info, Target, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { ChipsPanel } from '@/components/stock/chips-panel';
 import { SignalList } from '@/components/stock/signal-list';
@@ -307,13 +307,20 @@ export function StockCard({
           )}
 
           {/* 三情境機率是新手最容易誤讀的東西：「多頭 55%」會被讀成
-              「有 55% 機率會賺」，而視覺化強化了那個誤讀。 */}
-          {shows('expected_value') && (
-            <div className="space-y-2">
-              <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
-              <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
-              <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
-            </div>
+              「有 55% 機率會賺」，而視覺化強化了那個誤讀。
+              收合的第二個理由：E(V) 就是這三條的加權摘要，兩個並排等於
+              同一個宣稱講兩次，而它們出自同一張未經回測的機率表。 */}
+          {shows('expected_value') && pBull != null && (
+            <details className="group">
+              <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+                三情境機率與報酬
+              </summary>
+              <div className="space-y-2 mt-2">
+                <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
+                <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
+                <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
+              </div>
+            </details>
           )}
 
           {/* 動能與新手視圖的左欄原本整片空白 —— 那兩個視圖不看 E(V)、
@@ -331,7 +338,11 @@ export function StockCard({
               entryHigh={entryHigh}
               stopLoss={stopLoss}
               takeProfit={takeProfit}
-              firstTarget={firstTarget}
+              // 1R 與移動停損是進階術語，新手視圖不講。先前這兩個價位在卡片底下
+              // 有自己的灰籤並受 trailing_stop 控制，但地圖無條件把「第一目標」
+              // 畫給所有人看 —— 同一個決定在兩個地方講反了。
+              firstTarget={shows('trailing_stop') ? firstTarget : null}
+              trailingStop={shows('trailing_stop') ? trailingStop : null}
               ma20={ma20}
               ma60={ma60}
               swingHigh={swingHigh}
@@ -436,39 +447,30 @@ export function StockCard({
           </div>
         ) : entryLow && entryHigh && stopLoss && takeProfit ? (
           <div className="space-y-5">
-            {/* Price Levels */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">
-                  {effectiveAdvice.planKind === 'conditional' ? '成立後進場區' : '進場區間'}
+            {/* 進場區、停損、停利的數字先前印在這裡的三欄格線上，而同一組數字
+                在上方的價位地圖是刻度標籤、在下方又有「第一目標 (1R)」與
+                「移動停損起始」兩個灰籤 —— 一張卡片講三次。地圖是唯一能同時
+                回答「多少錢」與「相對月線在哪」的那一份，其餘兩份刪掉。
+
+                停損依據留下來但收合：它回答的是「這個停損是踩在結構上還是懸空的」，
+                重要，但不是每次看卡片都要讀的東西。 */}
+            {stopBasis && (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer select-none">停損 {stopLoss} 是怎麼算出來的</summary>
+                <div className="mt-1 leading-relaxed">
+                  {stopBasis.text}
+                  {(stopBasis.reference?.swingLow != null || stopBasis.reference?.ma20 != null) && (
+                    <>
+                      <br />
+                      對照：
+                      {stopBasis.reference.swingLow != null && `近20日低 ${stopBasis.reference.swingLow}`}
+                      {stopBasis.reference.swingLow != null && stopBasis.reference.ma20 != null && '、'}
+                      {stopBasis.reference.ma20 != null && `月線 ${stopBasis.reference.ma20}`}
+                    </>
+                  )}
                 </div>
-                <div className="font-mono font-medium text-foreground">{entryLow} - {entryHigh}</div>
-              </div>
-              <div>
-                <div className="text-xs text-destructive mb-1 flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 停損</div>
-                <div className="font-mono font-medium text-destructive">{stopLoss}</div>
-                {/* 只給一個數字，使用者無從判斷這個停損是踩在結構上還是懸空的 ——
-                    同樣是 115 元，落在近 20 日低點之下與之上，被掃出場的機率完全不同 */}
-                {stopBasis && (
-                  <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                    {stopBasis.text}
-                    {(stopBasis.reference?.swingLow != null || stopBasis.reference?.ma20 != null) && (
-                      <>
-                        <br />
-                        對照：
-                        {stopBasis.reference.swingLow != null && `近20日低 ${stopBasis.reference.swingLow}`}
-                        {stopBasis.reference.swingLow != null && stopBasis.reference.ma20 != null && '、'}
-                        {stopBasis.reference.ma20 != null && `月線 ${stopBasis.reference.ma20}`}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div>
-                <div className="text-xs text-primary mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> 停利</div>
-                <div className="font-mono font-medium text-primary">{takeProfit}</div>
-              </div>
-            </div>
+              </details>
+            )}
 
             {/* Position Sizing */}
             {shows('position_sizing') && position && economics && (
@@ -602,29 +604,14 @@ export function StockCard({
               </div>
             )}
 
-            {/* Extra notes —— 1R 與移動停損是進階術語，新手視圖不顯示 */}
-            {shows('trailing_stop') && (
-              <div className="flex flex-wrap gap-2 text-xs">
-                {firstTarget && (
-                  <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
-                    第一目標 (1R): <strong className="font-mono text-foreground">{firstTarget}</strong>
-                  </div>
-                )}
-                {trailingStop && (
-                  <div className="bg-muted px-2 py-1 rounded text-muted-foreground">
-                    移動停損起始: <strong className="font-mono text-foreground">{trailingStop}</strong>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* 計畫在什麼情況下不再成立。少了這塊，使用者只知道什麼時候該買，
-                不知道什麼時候該承認這次判斷錯了 —— 而後者才是真正會虧錢的那一半。 */}
+                不知道什麼時候該承認這次判斷錯了 —— 而後者才是真正會虧錢的那一半。
+                既然如此，它就不該是全卡最小最灰的一塊。 */}
             {shows('invalidation') && (
-              <div className="border-l-2 border-border pl-3 space-y-1 text-xs text-muted-foreground">
-                <div className="font-bold text-foreground/80">這份計畫何時失效</div>
-                <div>{effectiveInvalidation.priceReason}</div>
-                <div>{effectiveInvalidation.expiryReason}</div>
+              <div className="border-l-2 border-destructive/40 bg-destructive/5 rounded-r-lg pl-3 pr-3 py-2.5 space-y-1">
+                <div className="text-sm font-bold text-foreground">這份計畫何時失效</div>
+                <div className="text-xs text-foreground/80">{effectiveInvalidation.priceReason}</div>
+                <div className="text-xs text-foreground/80">{effectiveInvalidation.expiryReason}</div>
               </div>
             )}
           </div>

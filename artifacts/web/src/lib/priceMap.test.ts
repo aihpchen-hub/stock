@@ -126,6 +126,38 @@ describe('與現價的距離', () => {
   });
 });
 
+describe('移動停損', () => {
+  it('畫在圖上 —— 它是一個價位，先前只是卡片底下的一個灰籤', () => {
+    const levels = buildPriceMap({ ...FULL, trailingStop: 98 });
+    expect(levels.map((l) => l.key)).toContain('trailing_stop');
+  });
+
+  it('沒給就不畫，與其他價位一致', () => {
+    expect(buildPriceMap(FULL).map((l) => l.key)).not.toContain('trailing_stop');
+  });
+
+  it('計畫不成立時不畫 —— 它與停損停利同屬那份計畫', () => {
+    const levels = buildPriceMap({ ...FULL, trailingStop: 98, planKind: 'none' });
+    expect(levels.map((l) => l.key)).not.toContain('trailing_stop');
+  });
+});
+
+describe('主次分層', () => {
+  it('計畫價位與現價標為主要，均線與 20 日高低標為次要', () => {
+    const byKey = Object.fromEntries(
+      buildPriceMap({ ...FULL, trailingStop: 98 }).map((l) => [l.key, l.emphasis]),
+    );
+    // 這一組是使用者要抄進下單畫面的數字
+    for (const key of ['current', 'entry_low', 'entry_high', 'stop_loss', 'take_profit']) {
+      expect(byKey[key]).toBe('primary');
+    }
+    // 這一組是用來判斷上面那組合不合理的背景
+    for (const key of ['ma20', 'ma60', 'swing_high', 'swing_low']) {
+      expect(byKey[key]).toBe('context');
+    }
+  });
+});
+
 describe('用詞', () => {
   const labelOf = (input: PriceMapInput, key: string) =>
     buildPriceMap(input).find((l) => l.key === key)?.label;

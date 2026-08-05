@@ -24,16 +24,22 @@ export function DataFreshness({ priceAsOf, chipsAsOf, revenueAsOf }: DataFreshne
   // 一個來源的日期都沒有時整塊不渲染，不顯示空殼
   if (sources.length === 0) return null;
 
+  // 三個日期先前平鋪在標題區佔一整行。收合而非合成單一日期 ——
+  // 合成正是這個元件存在的理由要避免的事（見上方註解）。
+  // 股價日期本來就印在操作建議橫幅裡（「以 X 收盤價判斷」），
+  // 那才是它真正該出現的地方；這裡負責的是另外兩個來源。
   return (
-    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1">
+    <details className="text-xs text-muted-foreground">
+      <summary className="cursor-pointer select-none flex items-center gap-1 w-fit">
         <Clock3 className="w-3 h-3" /> 資料日期
-      </span>
-      {sources.map((s) => (
-        <span key={s.label} className="font-mono">
-          {s.label} {s.value}
-        </span>
-      ))}
-    </div>
+      </summary>
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
+        {sources.map((s) => (
+          <span key={s.label} className="font-mono">
+            {s.label} {s.value}
+          </span>
+        ))}
+      </div>
+    </details>
   );
 }

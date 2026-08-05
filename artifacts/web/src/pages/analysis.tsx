@@ -229,6 +229,8 @@ export default function Analysis() {
             {/* 查個股時標題先前只印使用者輸入的字串 —— 整頁最大的字就是「5439」，
                 哪家公司、什麼產業、甚至這是不是個股查詢，一個字都沒有。
                 官方簡稱與官方產業別在明細裡本來就有，只是從未用過。 */}
+            {/* 第一行只放身分，第二行放屬性。先前五個元素（公司名、代號、產業、
+                週期、情緒）並排，手機上會斷成三行 chips —— 那是把標題變成標籤牆。 */}
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl md:text-4xl font-black text-foreground">
                 {identity?.name ?? analysis.keyword}
@@ -238,23 +240,21 @@ export default function Analysis() {
                   {identity.code}
                 </span>
               )}
-              {identity?.industry && (
-                <span className="px-2 py-1 bg-accent/20 text-accent rounded-md text-sm font-medium border border-accent/20">
-                  {identity.industry}
-                </span>
-              )}
-              <span className="px-3 py-1 bg-muted text-muted-foreground rounded-md font-mono text-sm border border-border">
-                {analysis.period}
-              </span>
               <SentimentBadge sentiment={analysis.sentiment} />
             </div>
-            {/* 查個股時下方的名單是「這一檔加上同族群競爭者」，不是純產業掃描。
-                不寫出來的話，使用者看到另外三檔會以為系統搞錯了對象。 */}
-            {identity && (
-              <p className="text-sm text-muted-foreground">
-                以「{analysis.keyword}」查詢個股，下方為 {identity.name} 與同族群競爭者的比較。
-              </p>
-            )}
+            <div className="flex items-center gap-x-2 gap-y-1 flex-wrap text-sm text-muted-foreground">
+              {identity?.industry && <span>{identity.industry}</span>}
+              {identity?.industry && <span className="text-border">·</span>}
+              <span className="font-mono">{analysis.period}</span>
+              {/* 查個股時下方的名單是「這一檔加上同族群競爭者」，不是純產業掃描。
+                  不寫出來的話，使用者看到另外三檔會以為系統搞錯了對象。 */}
+              {identity && (
+                <>
+                  <span className="text-border">·</span>
+                  <span>以「{analysis.keyword}」查詢，下方含同族群競爭者</span>
+                </>
+              )}
+            </div>
             
             <div className="bg-card border border-border rounded-xl p-6 shadow-sm leading-relaxed text-foreground/90">
               {analysis.summary}
@@ -297,8 +297,11 @@ export default function Analysis() {
           )}
 
           {/* EV Ranking Table */}
+          {/* 手機端不顯示。這張表的五個欄位（代號、公司、現價、E(V)、訊號）
+              在下方每張卡片上都會再出現一次，而它唯一的附加價值是「橫向比較」——
+              窄螢幕一次只看得到一列，那個價值不成立，剩下的就只是重複一次。 */}
           {sortedStocks.length >= 2 && (
-            <section className="space-y-4">
+            <section className="space-y-4 hidden md:block">
               <h2 className="text-xl font-bold">期望值排名</h2>
               <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-sm text-left">

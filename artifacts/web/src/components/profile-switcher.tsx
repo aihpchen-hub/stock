@@ -45,8 +45,12 @@ export function ProfileSwitcher({ profile, onChange }: ProfileSwitcherProps) {
 
       {/* 動能視圖必須標明資料延遲。少了這句，畫面等於默許使用者拿
           延遲一天的日線去做當沖。 */}
+      {/* 改成中性樣式。這是產品定位的限制（日線延遲一天），不是某一筆交易的
+          風險 —— 而畫面上的暖色應該專門代表後者：買不到 1 張、流動性不足、
+          賠率被成本翻面、大盤系統性下跌。兩種東西共用同一個顏色，
+          等於讓一句永遠成立的說明去稀釋那些只在該警戒時才出現的警示。 */}
       {view.caveat && (
-        <div className="text-xs text-amber-500/90 bg-amber-500/10 px-2 py-1.5 rounded flex items-start gap-1.5">
+        <div className="text-xs text-muted-foreground bg-muted/50 border border-border px-2 py-1.5 rounded flex items-start gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{view.caveat}</span>
         </div>

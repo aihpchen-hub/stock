@@ -115,11 +115,16 @@ export function ChipsPanel({ chips, chipsAsOf }: ChipsPanelProps) {
 
       {/* 動向那一欄不隨天期切換而變 —— 它固定以近 5 日相對近 20 日的力道判定。
           不寫清楚的話，使用者會以為切到「1日」時動向講的是當天。 */}
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
-        動向以近 5 日相對近 20 日的力道變化判定，不隨上方天期切換。
-        {chips.tradingDays < 20 && `　目前僅取得 ${chips.tradingDays} 個交易日，長天期尚無法計算。`}
-        {chipsAsOf && `　資料截至 ${chipsAsOf}`}
-      </p>
+      {/* 收合而非刪除：這句話該在的時候要在，但它是方法論說明，
+          不是每次看卡片都要重讀的東西 */}
+      <details className="text-[11px] text-muted-foreground">
+        <summary className="cursor-pointer select-none">動向怎麼判定的</summary>
+        <p className="mt-1 leading-relaxed">
+          動向以近 5 日相對近 20 日的力道變化判定，不隨上方天期切換。
+          {chips.tradingDays < 20 && `　目前僅取得 ${chips.tradingDays} 個交易日，長天期尚無法計算。`}
+          {chipsAsOf && `　資料截至 ${chipsAsOf}`}
+        </p>
+      </details>
     </div>
   );
 }

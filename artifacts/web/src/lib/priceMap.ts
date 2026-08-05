@@ -20,7 +20,16 @@ export type PriceMapKey =
   | 'ma20'
   | 'ma60'
   | 'stop_loss'
+  | 'trailing_stop'
   | 'swing_low';
+
+/**
+ * 這條線是要抄進下單畫面的數字，還是用來判斷那些數字合不合理的背景。
+ *
+ * 這張圖現在是卡片上唯一一份價位陳述（先前同一組數字在三個地方各印一次），
+ * 因此它必須自己分出主次 —— 全部同一個字級等於沒有分。
+ */
+export type PriceMapEmphasis = 'primary' | 'context';
 
 export interface PriceMapInput {
   planKind: PlanKind;
@@ -34,6 +43,7 @@ export interface PriceMapInput {
   firstTarget?: number | null;
   ma20?: number | null;
   ma60?: number | null;
+  trailingStop?: number | null;
   swingHigh?: number | null;
   swingLow?: number | null;
 }
@@ -41,6 +51,8 @@ export interface PriceMapInput {
 export interface PriceMapLevel {
   key: PriceMapKey;
   label: string;
+  /** 主要價位用大字，背景用小字 */
+  emphasis: PriceMapEmphasis;
   value: number;
   /** 刻度線的位置。0 是軸底、100 是軸頂，永遠是真實比例 */
   pct: number;
@@ -63,7 +75,7 @@ const AXIS_PADDING = 8;
  * 價位靠得近時（例如進場上下緣只差一檔）標籤會疊成一團看不清，
  * 但刻度線不能跟著移動 —— 移了這張圖就不是真實比例了。
  */
-export const LABEL_MIN_GAP = 7;
+export const LABEL_MIN_GAP = 8;
 
 const LABELS: Record<PriceMapKey, string> = {
   take_profit: '停利',
@@ -75,8 +87,22 @@ const LABELS: Record<PriceMapKey, string> = {
   ma20: '月線',
   ma60: '季線',
   stop_loss: '停損',
+  trailing_stop: '移動停損起始',
   swing_low: '20日低',
 };
+
+/**
+ * 要抄進下單畫面的價位（primary），與判斷那些價位合不合理的背景（context）。
+ *
+ * 這張圖現在是卡片上唯一一份價位陳述 —— 先前同一組數字在交易計畫三欄、
+ * 地圖標籤、1R 灰籤三個地方各印一次。既然合成一份，它就得自己分主次。
+ */
+const CONTEXT_KEYS: ReadonlySet<PriceMapKey> = new Set<PriceMapKey>([
+  'ma20',
+  'ma60',
+  'swing_high',
+  'swing_low',
+]);
 
 /**
  * 新手視圖的用詞。只有均線需要翻譯。
@@ -119,6 +145,7 @@ const PLAN_KEYS: ReadonlySet<PriceMapKey> = new Set<PriceMapKey>([
   'entry_high',
   'entry_low',
   'stop_loss',
+  'trailing_stop',
 ]);
 
 export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
@@ -134,6 +161,7 @@ export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
     ['ma20', input.ma20],
     ['ma60', input.ma60],
     ['stop_loss', input.stopLoss],
+    ['trailing_stop', input.trailingStop],
     ['swing_low', input.swingLow],
   ];
 
@@ -157,6 +185,7 @@ export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
     return {
       key,
       label: (input.glossary === 'plain' ? PLAIN_LABELS[key] : undefined) ?? LABELS[key],
+      emphasis: CONTEXT_KEYS.has(key) ? 'context' : 'primary',
       value,
       pct,
       labelPct: pct,

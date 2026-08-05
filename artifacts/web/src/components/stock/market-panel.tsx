@@ -80,9 +80,13 @@ export function MarketPanel({ returns, relativeStrength, market, groupRank }: Ma
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
-        相對強弱為個股報酬減大盤同期報酬（百分點），依規則計算，不計入評分。
-      </p>
+      {/* 收合而非刪除：「不計入評分」是誠實的宣告，但誠實不等於要一直印在臉上 */}
+      <details className="text-[11px] text-muted-foreground">
+        <summary className="cursor-pointer select-none">相對強弱怎麼算的</summary>
+        <p className="mt-1 leading-relaxed">
+          相對強弱為個股報酬減大盤同期報酬（百分點），依規則計算，不計入評分。
+        </p>
+      </details>
     </div>
   );
 }

@@ -27,6 +27,7 @@ const STYLES: Record<PriceMapKey, Style> = {
   entry_low: { line: 'border-primary/50', text: 'text-foreground/80', dashed: true },
   current: { line: 'border-foreground', text: 'text-foreground font-bold', dashed: false },
   stop_loss: { line: 'border-destructive', text: 'text-destructive', dashed: false },
+  trailing_stop: { line: 'border-destructive/50', text: 'text-destructive/80', dashed: true },
   ma20: { line: 'border-muted-foreground/40', text: 'text-muted-foreground', dashed: true },
   ma60: { line: 'border-muted-foreground/40', text: 'text-muted-foreground', dashed: true },
   swing_high: { line: 'border-muted-foreground/25', text: 'text-muted-foreground/70', dashed: true },
@@ -64,7 +65,7 @@ export function PriceMap(input: PriceMapInput) {
           貼在軸頂或軸底的那一個會有一半落在繪圖區外，沒有這圈留白就被切掉。
           絕對定位以 padding box 為準，留白必須加在外層才有效。 */}
       <div className="py-3">
-        <div className="relative h-[240px]">
+        <div className="relative h-[300px]">
           {/* 進場區畫成色帶而非兩條線 —— 它是一段可以進場的範圍，不是兩個價位 */}
           {entryLow && entryHigh && entryHigh.pct > entryLow.pct && (
             <div
@@ -79,6 +80,7 @@ export function PriceMap(input: PriceMapInput) {
 
           {levels.map((level) => {
             const style = STYLES[level.key];
+            const primary = level.emphasis === 'primary';
             const displaced = Math.abs(level.labelPct - level.pct) > 0.5;
             return (
               <React.Fragment key={level.key}>
@@ -101,12 +103,25 @@ export function PriceMap(input: PriceMapInput) {
                   />
                 )}
 
+                {/* 主要價位用 text-sm：這張圖現在是卡片上唯一一份價位陳述，
+                    使用者要從這裡抄數字進下單畫面，11px 抄不動。
+                    均線與 20 日高低維持小字，它們是判斷用的背景。 */}
                 <div
                   className="absolute left-[46%] right-0 flex items-baseline gap-1.5 translate-y-1/2 whitespace-nowrap"
                   style={{ bottom: `${level.labelPct}%` }}
                 >
-                  <span className={`text-[11px] ${style.text}`}>{level.label}</span>
-                  <span className={`text-[11px] font-mono ${style.text}`}>{price(level.value)}</span>
+                  <span
+                    className={`${primary ? 'text-xs' : 'text-[11px]'} ${style.text}`}
+                  >
+                    {level.label}
+                  </span>
+                  <span
+                    className={`${
+                      primary ? 'text-sm font-medium' : 'text-[11px]'
+                    } font-mono ${style.text}`}
+                  >
+                    {price(level.value)}
+                  </span>
                   {level.fromCurrent != null && (
                     <span className="text-[10px] font-mono text-muted-foreground/70">
                       {gap(level.fromCurrent)}
