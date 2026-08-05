@@ -105,7 +105,9 @@ export function AdviceBanner({
     <div className={`border rounded-lg p-4 flex items-start gap-3 ${className}`}>
       <Icon className="w-5 h-5 shrink-0 mt-0.5" />
       <div className="space-y-1 min-w-0">
-        <div className="font-bold">{title}</div>
+        {/* text-lg 不是裝飾。這是整張卡片唯一可直接執行的結論，先前它與
+            旁邊十幾個 text-xs 的佐證同一個字級，等於沒有結論。 */}
+        <div className="font-bold text-lg leading-tight">{title}</div>
         <div className="text-sm text-foreground/80 break-words">{body}</div>
         {/* 這行先前是 text-xs 的灰字，而它正上方的現價是 text-xl 粗體 ——
             視覺權重與資訊重要性完全相反。使用者最容易犯的錯就是照著昨天的

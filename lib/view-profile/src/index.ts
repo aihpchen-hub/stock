@@ -155,8 +155,18 @@ export const VIEW_CONFIG: Record<ViewProfile, ViewConfig> = {
 /** 切換器用的順序。新手在前、專業視圖在後 */
 export const PROFILES: ViewProfile[] = ['newbie', 'momentum', 'swing', 'value', 'dividend'];
 
-/** 系統預設。與既有畫面行為一致 —— 沒選過的人不該看到畫面突然變樣 */
-export const DEFAULT_PROFILE: ViewProfile = 'swing';
+/**
+ * 系統預設。
+ *
+ * 先前是波段，理由是「與既有畫面行為一致」。那個理由撐不住：波段是所有視圖的
+ * 超集（15 個區塊），於是**沒選過受眾的人拿到的是密度最高的那一版**，而且由
+ * E(V) 領銜 —— 那張機率表未經回測，未回測正是新手視圖砍掉它的原因。
+ * 一個「預設」不該同時是最吵的和最不可靠的。
+ *
+ * 改成新手之後，沒選過的人看到八個區塊：能不能買、最壞賠多少、價位在哪、
+ * 什麼時候該認錯。想要更多的人按一下切換器就有，而且切換是純前端、沒有延遲。
+ */
+export const DEFAULT_PROFILE: ViewProfile = 'newbie';
 
 export function viewFor(profile?: string | null): ViewConfig {
   return VIEW_CONFIG[(profile ?? '') as ViewProfile] ?? VIEW_CONFIG[DEFAULT_PROFILE];

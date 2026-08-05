@@ -23,8 +23,18 @@ describe('viewFor', () => {
     expect(viewFor('day_trader')).toBe(VIEW_CONFIG[DEFAULT_PROFILE]);
   });
 
-  it('預設是波段 —— 沒選過的人不該看到畫面突然變樣', () => {
-    expect(DEFAULT_PROFILE).toBe('swing');
+  it('預設是新手 —— 沒選過的人不該一開始就看到密度最高的那一版', () => {
+    expect(DEFAULT_PROFILE).toBe('newbie');
+  });
+
+  it('預設不是超集 —— 沒選過受眾的人不該拿到區塊最多的那一版', () => {
+    expect(VIEW_CONFIG[DEFAULT_PROFILE].show.length).toBeLessThan(
+      VIEW_CONFIG.swing.show.length,
+    );
+  });
+
+  it('預設視圖看不到 E(V) —— 未經回測的機率表不該是預設畫面的主角', () => {
+    expect(shows(DEFAULT_PROFILE, 'expected_value')).toBe(false);
   });
 });
 

@@ -237,15 +237,52 @@ export function StockCard({
         </div>
       </div>
 
+      {/* 結論層。
+          這兩塊先前埋在卡片下半部：操作建議排在整個雙欄格線之後（手機端要滑過
+          十來個區塊才看得到），而「最壞會賠多少」躲在部位試算盒的第三行。
+          一個回答「能不能買」的畫面，把答案放在證據後面。 */}
+      <div className="p-5 border-b border-border space-y-3">
+        <AdviceBanner
+          advice={effectiveAdvice}
+          currentPrice={currentPrice}
+          entryLow={entryLow}
+          entryHigh={entryHigh}
+          stopLoss={stopLoss}
+          priceAsOf={priceAsOf}
+        />
+
+        {/* 新手視圖的註解寫「那是他唯一該記住的數字」—— 那就不該印在第三層。
+            計畫不成立時不顯示：沒有有效停損，這個數字算不出意義。 */}
+        {shows('position_sizing') && position && economics && effectiveAdvice.planKind !== 'none' && (
+          <div className="flex items-baseline justify-between gap-3 bg-destructive/5 border border-destructive/20 rounded-lg px-4 py-3">
+            <span className="text-sm text-muted-foreground">
+              {position.lots > 0 ? `照建議買 ${position.lots} 張，最壞會賠` : '每張最壞會賠'}
+            </span>
+            <span className="text-xl font-bold font-mono text-destructive">
+              NT${' '}
+              {Math.round(
+                position.lots > 0
+                  ? economics.netRiskPerLot * position.lots
+                  : economics.netRiskPerLot,
+              ).toLocaleString()}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* EV and Scenarios */}
       <div className="p-5 grid md:grid-cols-2 gap-6 border-b border-border">
         {/* EV Result */}
         <div className="space-y-4">
+          {/* 先前是 text-3xl font-black，全卡最大的字。而新手視圖砍掉這一項的
+              理由正是「那張機率表未經回測」—— 不夠可靠到能給新手看的東西，
+              不該在其他視圖當視覺主角。降到與其他佐證同級，顏色留著（正負號
+              本身有意義），但不再跟操作建議搶第一眼。 */}
           {shows('expected_value') && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground font-medium">加權期望值 E(V)</span>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm text-muted-foreground font-medium">加權期望值 E(V)</span>
               {ev != null && (
-                <span className={`text-3xl font-black font-mono ${ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                <span className={`text-xl font-bold font-mono ${ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
                   {ev > 0 ? '+' : ''}{ev.toFixed(2)}%
                 </span>
               )}
@@ -371,15 +408,6 @@ export function StockCard({
 
       {/* Trading Plan */}
       <div className="p-5 bg-background/50 flex-1 space-y-4">
-        <AdviceBanner
-          advice={effectiveAdvice}
-          currentPrice={currentPrice}
-          entryLow={entryLow}
-          entryHigh={entryHigh}
-          stopLoss={stopLoss}
-          priceAsOf={priceAsOf}
-        />
-
         {/* 摘要由已算出的欄位模板組句，不呼叫模型 —— 因此永遠不會與
             下方的數字牴觸。模型敘述做不到這一點，而它就印在數字旁邊。 */}
         {shows('narrative') && narrative && (
