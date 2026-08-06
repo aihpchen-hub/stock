@@ -6,7 +6,8 @@ import { SHARES_PER_LOT, discountToTenths } from '@/lib/fees';
 import { planPositionFor } from '@/lib/position';
 import { isConclusive } from '@/lib/verifyStats';
 import { Term } from '@/components/term';
-import { TrendingUp, AlertTriangle, Info, Target, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
+import { EMPTY, formatLots, formatSignedPct, formatVolumeLots } from '@/lib/format';
+import { AlertTriangle, Target, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { ChipsPanel } from '@/components/stock/chips-panel';
 import { SignalList } from '@/components/stock/signal-list';
@@ -434,7 +435,7 @@ export function StockCard({
             {shows('monthly_yoy') && (
               <MetricCard
                 label="月營收 YoY"
-                value={revenueYoY != null ? `${revenueYoY > 0 ? '+' : ''}${revenueYoY.toFixed(1)}%` : '-'}
+                value={formatSignedPct(revenueYoY)}
                 isPositive={revenueYoY ? revenueYoY > 0 : undefined}
               />
             )}
@@ -446,20 +447,20 @@ export function StockCard({
               (volume ? (
                 <MetricCard
                   label={`當日量（均量 ${formatVolumeRatio(volume.ratio)}）`}
-                  value={formatVolume(volume.latest)}
+                  value={formatVolumeLots(volume.latest)}
                   isPositive={volume.kind === 'surge' ? true : undefined}
                 />
               ) : (
-                <MetricCard label="20日均量" value={formatVolume(avgVolume20)} />
+                <MetricCard label="20日均量" value={formatVolumeLots(avgVolume20)} />
               ))}
             {/* 舊快照沒有 chips 欄位，退回原本的單一累積數字。
                 這裡的天期標示刻意寫「約24日」而非「30日」—— 舊資料抓的是
                 35 個日曆日，從來就不是 30 個交易日。 */}
             {shows('chips') && !chips && (
-              <MetricCard label="外資（約24日）" value={formatInstitutional(foreignNet30d)} />
+              <MetricCard label="外資（約24日）" value={formatLots(foreignNet30d)} />
             )}
             {shows('chips') && !chips && (
-              <MetricCard label="投信（約24日）" value={formatInstitutional(trustNet30d)} />
+              <MetricCard label="投信（約24日）" value={formatLots(trustNet30d)} />
             )}
           </div>
           {/* 相對強弱排在籌碼之前：它回答的是「這檔到底強不強」，
@@ -744,29 +745,8 @@ function MetricCard({ label, value, isPositive }: { label: string, value: string
   );
 }
 
-function formatMaSignal(signal?: string) {
-  switch (signal) {
-    case 'above_both': return '站上雙均線';
-    case 'above_ma20': return '僅站上月線';
-    case 'below_both': return '跌破雙均線';
-    default: return '資料不足';
-  }
-}
-
-function formatInstitutional(qty?: number) {
-  if (!qty) return '-';
-  const lots = Math.round(qty / 1000);
-  return `${lots > 0 ? '+' : ''}${lots}張`;
-}
-
-/** 成交量後端以「股」為單位，畫面一律換算成張（台股一張 1000 股） */
-function formatVolume(shares?: number | null) {
-  if (shares == null || !Number.isFinite(shares) || shares <= 0) return '-';
-  return `${Math.round(shares / 1000).toLocaleString()}張`;
-}
-
 /** 當日量相對於 20 日均量的倍數 */
 function formatVolumeRatio(ratio?: number | null) {
-  if (ratio == null || !Number.isFinite(ratio)) return '—';
+  if (ratio == null || !Number.isFinite(ratio)) return EMPTY;
   return `${ratio.toFixed(2)}×`;
 }

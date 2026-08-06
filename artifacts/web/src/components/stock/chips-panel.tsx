@@ -1,5 +1,6 @@
 import React from 'react';
 import { StockDetailResult, InvestorChips } from '@workspace/api-client-react';
+import { formatLots } from '@/lib/format';
 
 type Chips = NonNullable<StockDetailResult['chips']>;
 type WindowKey = 'd1' | 'd5' | 'd10' | 'd20';
@@ -34,13 +35,6 @@ const ROWS: Array<{ key: 'foreign' | 'trust' | 'dealer'; label: string }> = [
   { key: 'trust', label: '投信' },
   { key: 'dealer', label: '自營商' },
 ];
-
-/** 後端一律以「股」為單位，畫面一律換算成張（台股一張 1000 股） */
-function formatLots(shares: number | null | undefined): string {
-  if (shares == null || !Number.isFinite(shares)) return '—';
-  const lots = Math.round(shares / 1000);
-  return `${lots > 0 ? '+' : ''}${lots.toLocaleString()}張`;
-}
 
 function lotsClass(shares: number | null | undefined): string {
   if (shares == null || !Number.isFinite(shares) || shares === 0) return 'text-muted-foreground';

@@ -2,6 +2,7 @@ import React from 'react';
 import { StockDetailResult } from '@workspace/api-client-react';
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import type { GroupRank } from '@/lib/groupStrength';
+import { formatSignedPct } from '@/lib/format';
 
 interface MarketPanelProps {
   returns?: StockDetailResult['returns'];
@@ -10,8 +11,9 @@ interface MarketPanelProps {
   groupRank?: GroupRank | null;
 }
 
-const pct = (v: number | null | undefined) =>
-  v == null || !Number.isFinite(v) ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
+/** 四捨五入後為零時不帶正負號 —— 先前 (-0.04).toFixed(1) 會印出「-0.0%」
+    並配上紅色下跌箭頭，而那其實是打平 */
+const pct = (v: number | null | undefined) => formatSignedPct(v, 1);
 
 /**
  * 相對強弱：對大盤、對同族群。

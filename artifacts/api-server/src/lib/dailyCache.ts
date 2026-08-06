@@ -99,8 +99,18 @@ export function marketCacheKey(): string {
 
 /** 當日日期字串（YYYY-MM-DD，本地時區）—— 使用者的「今天」以本地為準 */
 export function today(now = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
+  // 固定以台北時間切日，不用伺服器本地時間。
+  //
+  // 正式環境是 Netlify 的無伺服器函式，時區是 UTC —— 用本地日期的話「今天」
+  // 會在台北時間早上八點翻新：收盤後寫進去的快取撐不到隔天開盤，而早上八點
+  // 到午夜之間的使用者拿到的是標記為「昨天」的那一份。本機開發在 UTC+8，
+  // 兩者行為不同，所以這個缺陷在本機永遠重現不出來。
+  //
+  // 台灣沒有日光節約，固定 +8 小時是精確的，不需要 Intl 的時區資料庫
+  // （函式打包後未必帶得齊 ICU）。
+  const taipei = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const y = taipei.getUTCFullYear();
+  const m = String(taipei.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(taipei.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }

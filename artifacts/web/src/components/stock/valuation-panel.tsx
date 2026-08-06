@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatNTD } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
 import {
   StockDetailResult,
@@ -211,7 +212,7 @@ export function FinancialsPanel({ code, enabled }: { code: string; enabled: bool
           </span>
           <span className="flex-1 border-b border-dotted border-border/60 min-w-2" />
           <span className="font-mono shrink-0">
-            {(quarters[0].fcf / 100_000_000).toFixed(1)} 億
+            {formatNTD(quarters[0].fcf, { compact: true })}
           </span>
         </div>
       )}
