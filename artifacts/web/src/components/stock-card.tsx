@@ -21,6 +21,13 @@ import {
 } from '@/components/stock/valuation-panel';
 import { maSignalText, viewFor, type ViewProfile } from '@workspace/view-profile';
 
+/** degraded 是後端的資料集代號，畫面要講使用者認得的名字 */
+const DEGRADED_LABEL: Record<string, string> = {
+  price: '股價',
+  revenue: '月營收',
+  institutional: '法人籌碼',
+};
+
 interface StockCardProps {
   stock: StockInfo;
   detail?: StockDetailResult;
@@ -34,6 +41,10 @@ interface StockCardProps {
   profile?: ViewProfile;
   /** 這檔就是使用者查的那一檔。查產業關鍵字時每張卡片都是 false */
   isQueried?: boolean;
+  /** 這一檔的明細抓失敗了。與 loading 互斥 —— 兩者先前共用同一個骨架分支 */
+  failed?: boolean;
+  /** 重新抓這一檔。失敗時沒有這個，使用者只能整頁重來 */
+  onRetry?: () => void;
 }
 
 export function StockCard({
@@ -45,16 +56,53 @@ export function StockCard({
   groupRank,
   profile,
   isQueried,
+  failed,
+  onRetry,
 }: StockCardProps) {
   const view = viewFor(profile);
   const shows = (section: Parameters<typeof view.show.includes>[0]) =>
     view.show.includes(section);
-  if (loading || !detail) {
+
+  if (loading) {
     return (
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm animate-pulse space-y-4">
         <div className="h-6 bg-muted rounded w-1/3"></div>
         <div className="h-20 bg-muted/50 rounded w-full"></div>
         <div className="h-4 bg-muted rounded w-1/2"></div>
+      </div>
+    );
+  }
+
+  // 抓失敗與載入中先前共用同一個 animate-pulse 骨架 —— 於是失敗的卡片
+  // 會永遠停在呼吸閃爍的灰塊上，沒有錯誤字樣、沒有重試，而 retry: false
+  // 連自動重試都關掉了。使用者一直在等一個不會來的東西；從查詢紀錄點回
+  // 一個完全靜態的歷史頁時，那塊「載入中」仍然在動。
+  if (!detail) {
+    return (
+      <div className="bg-card border border-destructive/30 rounded-xl p-6 shadow-sm space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-xl font-bold text-foreground">{stock.name}</h3>
+          <span className="px-1.5 py-0.5 font-mono text-sm text-muted-foreground bg-background rounded border border-border">
+            {stock.code}
+          </span>
+        </div>
+        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-destructive" />
+          <span className="leading-relaxed">
+            {failed
+              ? '這一檔的財務資料沒有抓到（多半是資料來源暫時無回應或額度用盡）。這張卡片沒有任何數字可以參考，也沒有列入下方的期望值排名。'
+              : '這一檔沒有留下財務資料 —— 這筆查詢紀錄存下來的時候就沒抓到。'}
+          </span>
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="text-sm px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors"
+          >
+            重新抓這一檔
+          </button>
+        )}
       </div>
     );
   }
@@ -106,6 +154,7 @@ export function StockCard({
     market,
     valuation,
     dividend,
+    degraded,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -230,6 +279,22 @@ export function StockCard({
           十來個區塊才看得到），而「最壞會賠多少」躲在部位試算盒的第三行。
           一個回答「能不能買」的畫面，把答案放在證據後面。 */}
       <div className="p-5 border-b border-border space-y-3">
+        {/* 評分少算了哪幾項。放在結論層而不是 E(V) 旁邊 —— 新手視圖看不到 E(V)，
+            但它的交易計畫與部位建議同樣建立在這些資料之上。
+            少算一項而不說，比整塊不顯示嚴重得多：畫面上其他數字都還是
+            看起來完全正常的精確值。 */}
+        {degraded && degraded.length > 0 && (
+          <div className="flex items-start gap-2 text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-lg px-3 py-2 leading-relaxed">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              本次沒有取得{degraded.map((d) => DEGRADED_LABEL[d] ?? d).join('、')}
+              （多半是資料來源的每小時額度用盡），
+              <strong className="font-bold">評分與期望值未計入這幾項</strong>，
+              數字會偏保守。稍後重新查詢即可取得完整結果。
+            </span>
+          </div>
+        )}
+
         <AdviceBanner
           advice={effectiveAdvice}
           currentPrice={currentPrice}

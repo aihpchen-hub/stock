@@ -30,7 +30,9 @@ function loadProfile(): ViewProfile {
 }
 import { useSettings } from '@/hooks/use-settings';
 import { StockCard } from '@/components/stock-card';
-import { ArrowLeft, Loader2, Newspaper, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError';
+import { ArrowLeft, Loader2, Newspaper, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 
 export default function Analysis() {
   const [location, setLocation] = useLocation();
@@ -46,6 +48,8 @@ export default function Analysis() {
   const [restoredDetails, setRestoredDetails] = useState<Record<string, StockDetailResult>>({});
   const [isRestoring, setIsRestoring] = useState(!!snapshotId);
   const [saved, setSaved] = useState(false);
+  /** 使用者按了「先看已完成的部分」。遮罩是唯一的出口，必須有一個不依賴請求狀態的開關 */
+  const [cancelled, setCancelled] = useState(false);
 
   // 1. Fetch or Restore
   useEffect(() => {
@@ -62,10 +66,16 @@ export default function Analysis() {
     } else if (keyword && period) {
       analyzeMut.mutate({ data: { keyword, period } }, {
         onSuccess: (data) => setAnalysis(data),
-        onError: () => {
-          alert('分析失敗');
-          setLocation('/');
-        }
+        // 不再彈原生 alert 也不再踢回首頁。這次分析花了 16~20 秒，
+        // 把使用者連同他輸入的關鍵字一起丟掉，等於要他從頭再來一次；
+        // 而後端其實說得出失敗的原因（配額用盡／金鑰無效／模型不可用）。
+        onError: (err) => {
+          toast({
+            variant: 'destructive',
+            title: '分析失敗',
+            description: apiErrorMessage(err),
+          });
+        },
       });
     } else {
       setLocation('/');
@@ -80,6 +90,20 @@ export default function Analysis() {
       : []
   });
 
+  /**
+   * 還在等的個股明細。
+   *
+   * 不能只看 isPending：TanStack Query v5 對**停用中**的 query 恆為
+   * status 'pending'。模型回一筆 code 為 null 的標的時 enabled 就是 false，
+   * 於是這個值永遠是 true —— 全螢幕遮罩永遠不消失、進度條卡在 4/5，
+   * 而頁面自己的「返回首頁」在一般流內、被 z-50 的遮罩蓋住點不到；
+   * 下面那個存快照的條件也永遠不成立，連查詢紀錄都不會留下。
+   * 加看 fetchStatus 之後，停用中的 query（fetchStatus 'idle'）不再算進去。
+   *
+   * 後端的 sanitizeStocks 已經從源頭擋掉那種輸入，這裡是第二道。
+   */
+  const stillLoading = queries.some((q) => q.isPending && q.fetchStatus !== 'idle');
+
   const derivedStockDetails = useMemo(() => {
     if (isRestoring) return restoredDetails;
     if (!analysis) return {};
@@ -91,9 +115,20 @@ export default function Analysis() {
     return map;
   }, [isRestoring, restoredDetails, analysis, queries]);
 
+  /** 這幾檔的明細抓不到。卡片要說出來，排名表的分母也要標明 */
+  const failedCodes = useMemo(() => {
+    if (isRestoring || !analysis) return new Set<string>();
+    const set = new Set<string>();
+    queries.forEach((q, i) => {
+      const code = analysis.stocks[i]?.code;
+      if (code && q.isError) set.add(code);
+    });
+    return set;
+  }, [isRestoring, analysis, queries]);
+
   // 3. Save snapshot
   useEffect(() => {
-    if (!isRestoring && analysis && queries.length > 0 && queries.every(q => !q.isPending) && !saved) {
+    if (!isRestoring && analysis && queries.length > 0 && !stillLoading && !saved) {
       const snap: AnalysisSnapshot = {
         id: makeSnapshotId(),
         createdAt: Date.now(),
@@ -105,7 +140,7 @@ export default function Analysis() {
       save(snap).catch(console.error);
       setSaved(true);
     }
-  }, [queries, analysis, isRestoring, saved, derivedStockDetails, keyword, period]);
+  }, [queries, stillLoading, analysis, isRestoring, saved, derivedStockDetails, keyword, period]);
 
   // 驗證結果只在掛載時讀一次 —— 它是使用者在首頁跑出來的，本頁不會改變它，
   // 沒有理由每次 render 都重新解析一遍 localStorage。
@@ -184,7 +219,9 @@ export default function Analysis() {
     [sortedStocks, derivedStockDetails],
   );
 
-  const isAnalyzing = !snapshotId && (!analysis || queries.some(q => q.isPending));
+  // analyzeMut 失敗時遮罩必須讓開，否則它會蓋住底下那塊錯誤與重試面板
+  const isAnalyzing =
+    !snapshotId && !cancelled && !analyzeMut.isError && (!analysis || stillLoading);
 
   if (settingsLoading) return null;
 
@@ -211,14 +248,76 @@ export default function Analysis() {
                   : `正在為 ${analysis.stocks.length} 檔標的計算情境期望值與交易計畫...`}
               </p>
             </div>
-            {analysis && (
+            {analysis && queries.length > 0 && (
               <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                <div 
-                  className="bg-primary h-full transition-all duration-300" 
-                  style={{ width: `${(queries.filter(q => !q.isPending).length / queries.length) * 100}%` }} 
+                <div
+                  className="bg-primary h-full transition-all duration-300"
+                  style={{ width: `${(queries.filter(q => !q.isPending).length / queries.length) * 100}%` }}
                 />
               </div>
             )}
+            {/* 遮罩是 fixed inset-0 z-50，會蓋住頁面自己的「返回首頁」。
+                不論請求卡在什麼狀態，畫面上都必須有一個出得去的按鈕。 */}
+            <div className="flex gap-3 w-full">
+              {analysis && (
+                <button
+                  type="button"
+                  onClick={() => setCancelled(true)}
+                  className="flex-1 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors"
+                >
+                  先看已完成的部分
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLocation('/')}
+                className="flex-1 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                取消，返回首頁
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 分析失敗時留在原頁。使用者輸入的關鍵字還在網址上，重試不必重打；
+          先前是彈一個沒有原因的 alert 然後把人踢回首頁。 */}
+      {!analysis && analyzeMut.isError && (
+        <div className="bg-card border border-destructive/30 rounded-2xl p-8 max-w-md mx-auto space-y-4 text-center">
+          <AlertTriangle className="w-10 h-10 text-destructive mx-auto" />
+          <h2 className="text-xl font-bold">分析「{keyword}」沒有成功</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {apiErrorMessage(analyzeMut.error)}
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                analyzeMut.mutate(
+                  { data: { keyword: keyword!, period } },
+                  {
+                    onSuccess: (data) => setAnalysis(data),
+                    onError: (err) =>
+                      toast({
+                        variant: 'destructive',
+                        title: '分析失敗',
+                        description: apiErrorMessage(err),
+                      }),
+                  },
+                )
+              }
+              disabled={analyzeMut.isPending}
+              className="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium transition-colors disabled:opacity-50"
+            >
+              {analyzeMut.isPending ? '重試中…' : '重試'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation('/')}
+              className="flex-1 py-2.5 border border-border rounded-lg hover:bg-muted transition-colors"
+            >
+              返回首頁
+            </button>
           </div>
         </div>
       )}
@@ -323,7 +422,16 @@ export default function Analysis() {
           {sortedStocks.length >= 2 && (
             <section className="space-y-4 hidden md:block">
               <h2 className="text-xl font-bold">期望值排名</h2>
-              <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
+              {/* 排名表只列得出有明細的那幾檔。少了這一行，5 檔裡有 2 檔抓失敗時
+                  畫面會寫「期望值第 1/3」而使用者手上明明有 5 檔 —— 差額沒有一個字
+                  解釋，而真正 E(V) 最高的那檔可能正是沒抓到的其中之一。 */}
+              {rankedRows.length < sortedStocks.length && (
+                <p className="text-xs text-muted-foreground">
+                  {sortedStocks.length - rankedRows.length} 檔因資料未取得或無法計算期望值，
+                  未列入本表比較。
+                </p>
+              )}
+              <div className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm">
                 <table className="w-full text-sm text-left">
                   <thead className="bg-muted/50 text-muted-foreground border-b border-border">
                     <tr>
@@ -409,13 +517,17 @@ export default function Analysis() {
               {cardStocks.map((stock) => {
                 const detail = derivedStockDetails[stock.code];
                 const query = queries[queryIndexOf.get(stock.code) ?? -1];
-                const isLoading = !isRestoring && (!query || query.isPending);
+                // 失敗與載入中必須分得開，否則失敗的卡片會永遠停在骨架動畫上
+                const isLoading =
+                  !isRestoring && (!query || (query.isPending && query.fetchStatus !== 'idle'));
                 return (
                   <StockCard
                     key={stock.code}
                     stock={stock}
                     detail={detail}
                     loading={isLoading}
+                    failed={failedCodes.has(stock.code)}
+                    onRetry={query ? () => void query.refetch() : undefined}
                     settings={settings}
                     verified={
                       detail?.ruleVersion != null

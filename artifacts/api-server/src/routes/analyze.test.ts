@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeClaims, normalizeSource } from "./analyze";
+import { normalizeClaims, normalizeSource, sanitizeStocks } from "./analyze";
 
 describe("normalizeSource", () => {
   it("接受指向現有新聞的編號", () => {
@@ -68,5 +68,48 @@ describe("normalizeClaims", () => {
   it("非陣列輸入回空陣列，不崩潰", () => {
     expect(normalizeClaims(undefined, 4)).toEqual([]);
     expect(normalizeClaims(null as never, 4)).toEqual([]);
+  });
+});
+
+describe("sanitizeStocks", () => {
+  const ok = { code: "2330", name: "台積電", reason: "先進封裝主力", sector: "晶圓代工" };
+
+  it("保留四個必要欄位齊全的標的，並正規化出處編號", () => {
+    expect(sanitizeStocks([{ ...ok, reasonSource: 2 }], 4)).toEqual([
+      { ...ok, reasonSource: 2 },
+    ]);
+  });
+
+  it("缺 name 的那筆被濾掉 —— 它會讓前端在 render 期間丟例外而整頁白屏", () => {
+    // openapi 宣告 code/name/reason/sector 全部 required，但模型只是被
+    // 「請回 JSON」要求，沒有 responseSchema 約束。少一個 name，
+    // queriedStock 的 s.name.trim() 就是 TypeError，而全樹沒有 ErrorBoundary。
+    const out = sanitizeStocks([{ code: "2330", reason: "x", sector: "y" }, ok], 4);
+    expect(out).toEqual([{ ...ok, reasonSource: null }]);
+  });
+
+  it("代號不是四到六位數字的一律濾掉", () => {
+    const bad = [
+      { ...ok, code: "AAPL" },
+      { ...ok, code: "23" },
+      { ...ok, code: "1234567" },
+      { ...ok, code: "" },
+    ];
+    expect(sanitizeStocks(bad, 4)).toEqual([]);
+  });
+
+  it("null、字串或非物件的元素不會讓整支 API 崩潰", () => {
+    expect(sanitizeStocks([null, "2330", 123, undefined, ok], 4)).toEqual([
+      { ...ok, reasonSource: null },
+    ]);
+  });
+
+  it("只有空白的欄位視為缺漏", () => {
+    expect(sanitizeStocks([{ ...ok, name: "   " }], 4)).toEqual([]);
+  });
+
+  it("輸入不是陣列時回空陣列", () => {
+    expect(sanitizeStocks(undefined, 4)).toEqual([]);
+    expect(sanitizeStocks({ code: "2330" }, 4)).toEqual([]);
   });
 });

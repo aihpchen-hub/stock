@@ -102,6 +102,46 @@ export function normalizeSource(raw: unknown, newsCount: number): number | null 
   return raw >= 1 && raw <= newsCount ? raw : null;
 }
 
+/** 四到六位純數字，與 isStockCode 及前端 queriedStock 同一套規則 */
+const STOCK_CODE_PATTERN = /^\d{4,6}$/;
+
+const REQUIRED_STOCK_FIELDS = ["code", "name", "reason", "sector"] as const;
+
+/**
+ * 過濾模型給的標的清單。
+ *
+ * openapi 宣告 StockInfo 的 code／name／reason／sector 全部 required，但唯一的
+ * 約束是 prompt 裡的一句話 —— generationConfig 只設了 responseMimeType，
+ * 沒有 responseSchema。少一個 name，前端 `queriedStock` 的 `s.name.trim()`
+ * 就是 TypeError；那個 throw 發生在 render 期間的 useMemo 裡，而整個 app
+ * 沒有 ErrorBoundary，結果是整棵樹卸載、畫面全白，連返回首頁都沒有。
+ * code 為 null 更糟：TanStack Query 會算出 enabled: false 而 isPending 恆真，
+ * 分析頁的全螢幕遮罩因此永遠不消失。
+ *
+ * 而這一切都會被寫進當日快取 —— 同一個關鍵字整天重試都是同一個死結。
+ */
+export function sanitizeStocks(
+  raw: unknown,
+  newsCount: number,
+): NonNullable<AiAnalysis["stocks"]> {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+    .filter((s) =>
+      REQUIRED_STOCK_FIELDS.every(
+        (k) => typeof s[k] === "string" && (s[k] as string).trim().length > 0,
+      ),
+    )
+    .filter((s) => STOCK_CODE_PATTERN.test((s["code"] as string).trim()))
+    .map((s) => ({
+      code: (s["code"] as string).trim(),
+      name: (s["name"] as string).trim(),
+      reason: (s["reason"] as string).trim(),
+      sector: (s["sector"] as string).trim(),
+      reasonSource: normalizeSource(s["reasonSource"], newsCount),
+    }));
+}
+
 /**
  * 依序嘗試的模型。
  *
@@ -419,12 +459,23 @@ ${newsText}
       // 純文字版與帶出處版由同一份輸出產生，順序一致，不會不同步
       catalysts: catalystDetails.map((c) => c.text),
       catalystDetails,
-      stocks: (Array.isArray(aiData.stocks) ? aiData.stocks : []).map((s) => ({
-        ...s,
-        reasonSource: normalizeSource(s.reasonSource, shownNews.length),
-      })),
+      // 模型輸出唯一的約束是 prompt 裡的一句話 —— 缺欄位、假代號、
+      // 甚至 null 元素都進得來，而畫面對它們沒有任何防禦。
+      stocks: sanitizeStocks(aiData.stocks, shownNews.length),
       newsItems: shownNews,
     };
+
+    // 一檔都認不出來時不入快取。壞結果被鎖成當日答案的後果比失敗嚴重得多：
+    // 快取鍵是 keyword+period+day，之後整整一天所有人查同一個關鍵字都拿到
+    // 同一份壞資料，重新整理與換裝置都沒用。與 stock.ts 的
+    // 「只快取成功結果」同一個原則。
+    if (payload.stocks.length === 0) {
+      req.log.warn({ keyword, period }, "Model returned no usable stocks; not caching");
+      res.status(502).json({
+        error: "AI 回傳的標的清單無法辨識（可能是暫時性的模型輸出異常），請再試一次。",
+      });
+      return;
+    }
 
     await analysisCache.set(cacheKey, day, payload);
     res.json(payload);

@@ -17,7 +17,14 @@ import { PERIOD_TRADING_DAYS, buildStopBasis, calcEV, horizonFactor } from "../l
 import { buildNarrative } from "../lib/narrative";
 import { resolveStock } from "../lib/stockInfo";
 import { roundToTick } from "../lib/ticks";
-import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind, toDateStr } from "../lib/finmind";
+import {
+  buildUrl,
+  dateMinusDays,
+  dateMinusMonths,
+  fetchFinMind,
+  fetchFinMindResult,
+  toDateStr,
+} from "../lib/finmind";
 import { buildChips, type InstitutionalRow } from "../lib/chips";
 import { dailyCacheFor } from "../lib/caches";
 import { marketCacheKey, stockCacheKey, today } from "../lib/dailyCache";
@@ -150,18 +157,20 @@ router.get("/stock/:code", async (req, res) => {
     const VALUATION_FETCH_DAYS = 1830;
 
     const [
-      prices,
-      revenues,
-      institutionals,
+      priceResult,
+      revenueResult,
+      institutionalResult,
       info,
       market,
       perRows,
       dividendRows,
       dividendResults,
     ] = await Promise.all([
-      fetchFinMind<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(PRICE_FETCH_DAYS), token)),
-      fetchFinMind<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
-      fetchFinMind<InstitutionalRow>(
+      // 這三個資料集直接決定評分。它們用 fetchFinMindResult 是因為
+      // 「抓不到」與「值是零」對評分的意義完全不同，而先前兩者都是空陣列。
+      fetchFinMindResult<PriceRow>(buildUrl("TaiwanStockPrice", code, dateMinusDays(PRICE_FETCH_DAYS), token)),
+      fetchFinMindResult<RevenueRow>(buildUrl("TaiwanStockMonthRevenue", code, dateMinusMonths(15), token)),
+      fetchFinMindResult<InstitutionalRow>(
         buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(CHIPS_FETCH_DAYS), token),
       ),
       resolveStock(code),
@@ -175,6 +184,27 @@ router.get("/stock/:code", async (req, res) => {
         buildUrl("TaiwanStockDividendResult", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
       ),
     ]);
+
+    // 哪些影響評分的資料集這次沒抓到。空陣列代表評分是完整的。
+    //
+    // 估值與股利不列入：它們只餵價值／存股視圖的展示區塊，不進評分公式，
+    // 缺了畫面本來就有「—」可以表示。營收與籌碼則不同 —— 少算的是
+    // ±3 與 ±2.5 分，evScore 會從 5.5 掉到 0，而畫面上的 E(V) 仍是一個
+    // 看起來完全正常的精確數字。
+    const degraded: string[] = [];
+    if (!priceResult.ok) degraded.push("price");
+    if (!revenueResult.ok) degraded.push("revenue");
+    if (!institutionalResult.ok) degraded.push("institutional");
+    if (degraded.length > 0) {
+      req.log.warn(
+        { code, degraded, reasons: [priceResult, revenueResult, institutionalResult].filter((r) => !r.ok) },
+        "Scoring inputs incomplete; result will not be cached",
+      );
+    }
+
+    const prices = priceResult.ok ? priceResult.rows : [];
+    const revenues = revenueResult.ok ? revenueResult.rows : [];
+    const institutionals = institutionalResult.ok ? institutionalResult.rows : [];
 
     // ── Price / MA ─────────────────────────────────────────────────────────
     const closes = prices.map((p) => p.close).filter(Boolean);
@@ -416,11 +446,15 @@ router.get("/stock/:code", async (req, res) => {
       trustNetDays:
         avgVolume20 && avgVolume20 > 0 ? Math.round((trustNet / avgVolume20) * 100) / 100 : null,
       ...ev,
+      degraded,
     };
 
-    // 只快取成功結果。FinMind 失敗時 fetchFinMind 回空陣列，算出來會是一份
-    // 「資料不足」的計畫 —— 那份不該被鎖成當天的答案。
-    if (currentPrice !== null) {
+    // 只快取成功結果。FinMind 失敗時算出來會是一份被稀釋過的評分 ——
+    // 那份不該被鎖成當天的答案。先前只擋了「連收盤價都沒有」這一種，
+    // 而額度用盡最常見的樣子是價格有、營收與籌碼沒有：evScore 掉了 5.5 分，
+    // currentPrice 卻不是 null，於是那份結果被寫進快取供應一整天，
+    // 使用者重新整理、換裝置、明天早上八點前來查，拿到的都是同一份。
+    if (currentPrice !== null && degraded.length === 0) {
       await stockCache.set(cacheKey, day, payload);
     }
 

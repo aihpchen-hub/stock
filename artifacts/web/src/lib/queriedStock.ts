@@ -31,10 +31,13 @@ export function queriedCode(
   if (target.length === 0) return null;
 
   if (CODE_PATTERN.test(target)) {
-    return stocks.some((s) => s.code === target) ? target : null;
+    return stocks.some((s) => s?.code === target) ? target : null;
   }
 
-  return stocks.find((s) => s.name.trim() === target)?.code ?? null;
+  // 後端的 sanitizeStocks 已經擋掉缺欄位的標的，但 localStorage 裡的舊快照
+  // 是在那之前存的。這個函式在 render 期間的 useMemo 內被呼叫，丟例外
+  // 等於整棵樹卸載、畫面全白 —— 一筆三個月前的壞紀錄不該有那個殺傷力。
+  return stocks.find((s) => String(s?.name ?? "").trim() === target)?.code ?? null;
 }
 
 export interface QueriedIdentity {

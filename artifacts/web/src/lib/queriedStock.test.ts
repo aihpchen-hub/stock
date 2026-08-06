@@ -78,3 +78,30 @@ describe('queriedIdentity', () => {
     expect(queriedIdentity('AI水冷散熱', STOCKS, DETAILS)).toBeNull();
   });
 });
+
+describe("面對殘缺的標的清單不崩潰", () => {
+  // 後端已經有 sanitizeStocks 擋，但舊的 localStorage 快照是在那之前存的，
+  // 而 render 期間丟例外就是整棵樹卸載（全站沒有 ErrorBoundary）。
+  const broken = [
+    { code: "2330" },
+    { name: "台積電" },
+    null,
+    undefined,
+    { code: null, name: null },
+  ] as unknown as Array<{ code: string; name: string }>;
+
+  it("缺 name 的舊快照不會讓 queriedCode 丟 TypeError", () => {
+    expect(() => queriedCode("台燿", broken)).not.toThrow();
+    expect(queriedCode("台燿", broken)).toBeNull();
+  });
+
+  it("缺 code 的舊快照不會讓代號查詢丟 TypeError", () => {
+    expect(() => queriedCode("2330", broken)).not.toThrow();
+    expect(queriedCode("2330", broken)).toBe("2330");
+  });
+
+  it("queriedIdentity 同樣不受影響", () => {
+    expect(() => queriedIdentity("台燿", broken, {})).not.toThrow();
+    expect(queriedIdentity("台燿", broken, {})).toBeNull();
+  });
+});

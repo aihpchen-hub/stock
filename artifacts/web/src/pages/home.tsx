@@ -8,6 +8,8 @@ import { AnalyzeRequestPeriod, useVerifyOutcomes } from '@workspace/api-client-r
 import { buildVerifyGroups, isRipe, OUTCOME_LABEL } from '@/lib/verify';
 import { loadVerify, saveVerify, type StoredVerify } from '@/lib/verifyStore';
 import { NumberField } from '@/components/number-field';
+import { toast } from '@/hooks/use-toast';
+import { apiErrorMessage } from '@/lib/apiError';
 import {
   MAX_ALLOWED_POSITION_PCT,
   MAX_FEE_DISCOUNT,
@@ -51,7 +53,10 @@ export default function Home() {
       const groups = await buildVerifyGroups(history);
       if (groups.length === 0) {
         // 門檻隨週期而異（1m 七日、3m 十四日、6m 廿一日），因此不寫死一個天數
-        alert('目前沒有夠舊的歷史紀錄可供驗證。計畫要走過一段時間才對得出結論。');
+        toast({
+          title: '還沒有可以對答案的紀錄',
+          description: '計畫要走過一段時間才對得出結論，再過幾天回來看看。',
+        });
         return;
       }
       // 逐版本各打一次 —— 後端一次最多收 40 筆，而不同規則算出來的計畫
@@ -67,7 +72,13 @@ export default function Home() {
       setVerifyResults(summaries);
     } catch (err) {
       console.error(err);
-      alert('驗證失敗，請稍後再試。');
+      // 這個函式也會被 useEffect 自動觸發 —— 用原生 alert 的話，
+      // 使用者每次回到首頁都會被同一個對話框擋一次。
+      toast({
+        variant: 'destructive',
+        title: '對答案失敗',
+        description: apiErrorMessage(err),
+      });
     }
   };
 
