@@ -114,15 +114,19 @@ export interface EVInput {
 }
 
 export interface EVOutput {
+  /** 綜合評分。不依賴價格波動，因此永遠算得出來。 */
   evScore: number;
-  pBull: number;
-  pBase: number;
-  pBear: number;
-  rBull: number;
-  rBase: number;
-  rBear: number;
-  ev: number;
-  evSignal: EvSignal;
+  // 以下八個欄位全部建立在 atrPct 之上。算不出波動時一律為 null ——
+  // 「算不出來」與「算出來是零」必須在型別上就分得開，否則 0 會在
+  // 期望值排名上勝過任何真的算出負值的股票。
+  pBull: number | null;
+  pBase: number | null;
+  pBear: number | null;
+  rBull: number | null;
+  rBase: number | null;
+  rBear: number | null;
+  ev: number | null;
+  evSignal: EvSignal | null;
   atrPct: number | null;
   entryLow: number | null;
   entryHigh: number | null;
@@ -240,19 +244,27 @@ export function calcEV(input: EVInput): EVOutput {
       ? (input.atr / input.currentPrice) * 100
       : null;
 
-  // 三情境幅度隨持有期間伸縮；三者同步縮放，故機率與風報比不受影響
-  const rBull = atrPct === null ? 0 : round1(bullMultiple * atrPct * factor);
-  const rBase = atrPct === null ? 0 : round1(BASE_ATR_MULTIPLE * atrPct * factor);
-  const rBear = atrPct === null ? 0 : round1(BEAR_ATR_MULTIPLE * atrPct * factor);
+  // 三情境幅度隨持有期間伸縮；三者同步縮放，故機率與風報比不受影響。
+  // 沒有波動就沒有情境 —— 先前這裡在 atrPct 為 null 時把三個報酬寫成 0，
+  // 於是 ev 也是 0、evSignal 是 watch_positive，而一檔連收盤價都沒有的
+  // 標的因此被排到期望值第一列、印成綠色的 0.00%，還會被首頁選成「領先標的」。
+  const rBull = atrPct === null ? null : round1(bullMultiple * atrPct * factor);
+  const rBase = atrPct === null ? null : round1(BASE_ATR_MULTIPLE * atrPct * factor);
+  const rBear = atrPct === null ? null : round1(BEAR_ATR_MULTIPLE * atrPct * factor);
 
-  const ev = round1(pBull * rBull + pBase * rBase + pBear * rBear);
+  const ev =
+    rBull === null || rBase === null || rBear === null
+      ? null
+      : round1(pBull * rBull + pBase * rBase + pBear * rBear);
 
-  let evSignal: EvSignal;
-  if (ev > 8) evSignal = "strong_buy";
-  else if (ev > 3) evSignal = "buy";
-  else if (ev > -1) evSignal = "watch_positive";
-  else if (ev > -5) evSignal = "watch_negative";
-  else evSignal = "avoid";
+  let evSignal: EvSignal | null = null;
+  if (ev !== null) {
+    if (ev > 8) evSignal = "strong_buy";
+    else if (ev > 3) evSignal = "buy";
+    else if (ev > -1) evSignal = "watch_positive";
+    else if (ev > -5) evSignal = "watch_negative";
+    else evSignal = "avoid";
+  }
 
   let entryLow: number | null = null;
   let entryHigh: number | null = null;
@@ -266,8 +278,16 @@ export function calcEV(input: EVInput): EVOutput {
 
   const { atr, currentPrice, ma20 } = input;
   if (atr !== null && atr > 0 && currentPrice !== null && ma20 !== null) {
+    // 上市未滿三個月的新股算不出 MA60，maSignal 是 insufficient_data。
+    // 那代表「均線判斷不可信」，不代表「均線判斷是好的」—— 先前它會落進
+    // 下面的 else（站上均線）分支，於是一檔跌破月線 16% 的新股被算成
+    // 「現價可進場」，而多滿五個交易日、MA60 算得出來之後結論立刻翻成 avoid。
+    // 用與 MA60 無關的那半個條件補上防線：現價在月線之下就不給即時進場區。
+    const maUnknown = input.maSignal === "insufficient_data";
+    const belowMa20 = currentPrice < ma20;
+
     // 所有價位都取整到合法檔位 —— 下不出去的價格不該出現在交易計畫裡
-    if (input.maSignal === "below_both") {
+    if (input.maSignal === "below_both" || (maUnknown && belowMa20)) {
       // 跌破雙均線：不追。區間改為站回月線之上。
       entryTiming = "avoid";
       entryLow = roundToTick(ma20);
@@ -326,9 +346,11 @@ export function calcEV(input: EVInput): EVOutput {
 
   return {
     evScore: round1(score),
-    pBull,
-    pBase,
-    pBear,
+    // 機率與報酬同進同退：只留機率而不留報酬，畫面仍會畫出一張
+    // 「多頭 30% / 基準 45% / 空頭 25%」的分布圖給一檔沒有價格的股票。
+    pBull: atrPct === null ? null : pBull,
+    pBase: atrPct === null ? null : pBase,
+    pBear: atrPct === null ? null : pBear,
     rBull,
     rBase,
     rBear,

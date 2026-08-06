@@ -165,6 +165,33 @@ describe('planPosition 雙重限制', () => {
     expect(p?.pctOfCapital).toBeCloseTo(30, 5);
   });
 
+  it('兩個上限同時卡死在 0 張時歸咎於資金，因為調高風險預算救不了', () => {
+    // 一張要 50 萬；資金 100 萬 × 30% = 30 萬，買不起。
+    // 同時每張風險 25000 也超過 20000 的風險預算。
+    // 此時若回報 'risk'，畫面會說「把單筆風險上限提高到 25000 就能買 1 張」——
+    // 照做仍然買不到，因為擋住的是資金那一條。
+    const p = planPosition({
+      riskBudget: 20000,
+      capital: 1_000_000,
+      riskPerLot: 25000,
+      entryPrice: 500,
+    });
+    expect(p?.lots).toBe(0);
+    expect(p?.limitedBy).toBe('capital');
+  });
+
+  it('資金買得起但風險預算不足時仍歸咎於風險', () => {
+    // 一張 10 萬，資金面買得起 3 張；但每張風險 25000 > 20000
+    const p = planPosition({
+      riskBudget: 20000,
+      capital: 1_000_000,
+      riskPerLot: 25000,
+      entryPrice: 100,
+    });
+    expect(p?.lots).toBe(0);
+    expect(p?.limitedBy).toBe('risk');
+  });
+
   it('缺少必要輸入時回傳 null，不給誤導的建議', () => {
     expect(planPosition({ riskBudget: 20000, capital: 1_000_000, riskPerLot: null, entryPrice: 100 })).toBeNull();
     expect(planPosition({ riskBudget: 20000, capital: 1_000_000, riskPerLot: 0, entryPrice: 100 })).toBeNull();

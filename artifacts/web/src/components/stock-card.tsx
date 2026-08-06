@@ -1,8 +1,9 @@
 import React from 'react';
 import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
 import { deriveAdvice, deriveInvalidation } from '@workspace/advice';
-import { RiskSettings, planPosition } from '@/lib/settings';
-import { lotEconomics, roundTripCostPct, SHARES_PER_LOT } from '@/lib/fees';
+import { RiskSettings } from '@/lib/settings';
+import { SHARES_PER_LOT } from '@/lib/fees';
+import { planPositionFor } from '@/lib/position';
 import { TrendingUp, AlertTriangle, Info, Target, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { ChipsPanel } from '@/components/stock/chips-panel';
@@ -131,31 +132,18 @@ export function StockCard({
       period: period ?? null,
     });
 
-  // Plan position
-  const position = planPosition({
-    riskBudget: settings.riskBudget,
-    capital: settings.capital,
+  // 部位、每張損益與賠率一次算齊。三者必須共用同一組基準（進場區上緣、扣費後），
+  // 分開接線正是「建議張數用毛值算、最壞會賠用淨值印」那個缺陷的來源 ——
+  // 畫面會印出超過使用者自訂上限的虧損金額，同時又顯示「已達單筆風險上限」。
+  // 判斷邏輯在 @/lib/position，有測試鎖住「最壞虧損 ≤ 風險預算」這個不變式。
+  const { position, economics, netRiskReward } = planPositionFor({
+    entryHigh,
+    stopLoss,
+    takeProfit,
+    firstTarget,
     riskPerLot,
-    entryPrice: entryHigh, // conservative estimation using upper entry bound
-    maxPositionPct: settings.maxPositionPct,
+    settings,
   });
-
-  // Calculate economics
-  const economics = entryHigh && stopLoss && takeProfit ? lotEconomics({
-    entry: entryHigh,
-    stop: stopLoss,
-    target: takeProfit,
-    firstTarget: firstTarget,
-    discount: settings.feeDiscount,
-  }) : null;
-
-  // 實際到手的賠率。後端的 riskRewardRatio 是毛值、用價差算的，而下單要付
-  // 兩趟手續費與一趟證交稅 —— 畫面只印毛值等於系統性地把每一筆交易
-  // 講得比實際好。停損距離為 0（缺價位）時不給比值，不輸出 Infinity。
-  const netRiskReward =
-    economics && economics.netRiskPerLot > 0
-      ? economics.netRewardPerLot / economics.netRiskPerLot
-      : null;
 
   const signalColors = {
     strong_buy: 'bg-primary/20 text-primary border-primary/50',
@@ -627,7 +615,7 @@ export function StockCard({
   );
 }
 
-function ScenarioBar({ label, p, r, color }: { label: string, p?: number, r?: number, color: string }) {
+function ScenarioBar({ label, p, r, color }: { label: string, p?: number | null, r?: number | null, color: string }) {
   if (p == null || r == null) return null;
   const width = Math.max(4, p * 100);
   return (

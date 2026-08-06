@@ -806,29 +806,40 @@ components:
             -6.5 到 7.5。三情境機率的分段門檻是 4／2／0／-2，不依賴此上下限。
         pBull:
           type: number
+          nullable: true
           description: 多頭情境機率（0–1）
         pBase:
           type: number
+          nullable: true
           description: 基準情境機率（0–1）
         pBear:
           type: number
+          nullable: true
           description: 空頭情境機率（0–1）
         rBull:
           type: number
+          nullable: true
           description: 多頭情境預期報酬（%）
         rBase:
           type: number
+          nullable: true
           description: 基準情境預期報酬（%）
         rBear:
           type: number
+          nullable: true
           description: 空頭情境預期報酬（%）
         ev:
           type: number
-          description: 加權期望值 E(V)（%）
+          nullable: true
+          description: >-
+            加權期望值 E(V)（%）。算不出波動（停牌、資料抓取失敗、上市未滿 14 個交易日）
+            時為 null —— **不得以 0 代替**。0 在排名上勝過任何真的算出負值的標的，
+            一檔連收盤價都沒有的股票會因此被排到第一列並印成綠色的 0.00%。
         evSignal:
           type: string
+          nullable: true
           enum: [strong_buy, buy, watch_positive, watch_negative, avoid]
-          description: 期望值訊號
+          description: 期望值訊號。ev 為 null 時同為 null。
         priceAsOf:
           type: string
           nullable: true

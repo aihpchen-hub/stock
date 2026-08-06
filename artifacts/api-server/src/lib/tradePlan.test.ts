@@ -194,6 +194,28 @@ describe("calcEV 交易計畫", () => {
     expect(r.entryHigh).toBeGreaterThan(95);
   });
 
+  it("MA60 不足的新股若已跌破月線，比照跌破雙均線處理，不給即時進場區", () => {
+    // 上市未滿三個月（20 ≤ N < 60 根）時 calcMA(closes, 60) 回 null，
+    // maSignal 因此是 insufficient_data。先前這條路會落進「站上均線」分支，
+    // 把一檔已經跌破月線 16% 的股票算成 entryLow = entryHigh = 42、entryTiming = "now"，
+    // 畫面顯示綠色的「可進場 —— 現價 42 落在建議區間 42 ~ 42 之間」。
+    // 均線判斷不可信，不等於均線判斷是好的。
+    const r = calcEV(
+      input({ maSignal: "insufficient_data", currentPrice: 42, ma20: 50, ma60: null, atr: 3 }),
+    );
+    expect(r.entryTiming).toBe("avoid");
+    expect(r.entryLow).toBe(50);
+    expect(r.entryHigh).toBeGreaterThan(50);
+  });
+
+  it("MA60 不足但仍站在月線之上的新股，照常給進場區", () => {
+    const r = calcEV(
+      input({ maSignal: "insufficient_data", currentPrice: 52, ma20: 50, ma60: null, atr: 3 }),
+    );
+    expect(r.entryTiming).toBe("now");
+    expect(r.entryHigh).toBe(52);
+  });
+
   it("站上均線時進場區上緣為現價，下緣不低於月線", () => {
     const r = calcEV(input({ currentPrice: 100, ma20: 98, atr: 10 }));
     expect(r.entryHigh).toBe(100);
@@ -207,7 +229,28 @@ describe("calcEV 交易計畫", () => {
     expect(r.takeProfit).toBeNull();
     expect(r.riskRewardRatio).toBeNull();
     expect(r.atrPct).toBeNull();
-    expect(r.ev).toBe(0);
+  });
+
+  it("算不出波動時期望值為 null，不是 0", () => {
+    // FinMind 限流或該檔停牌時 closes 是空的 → currentPrice 與 atr 皆為 null。
+    // 先前這裡會回 ev = 0、evSignal = "watch_positive"，而 0 在期望值排名表上
+    // 勝過任何真的算出負值的股票 —— 一檔連收盤價都沒有的標的被排到第一列，
+    // 印成綠色的「0.00%」，還會被首頁挑成「領先標的」。
+    const r = calcEV(input({ atr: null, currentPrice: null }));
+    expect(r.ev).toBeNull();
+    expect(r.evSignal).toBeNull();
+  });
+
+  it("算不出波動時三情境機率與報酬一律為 null，不畫出一張假的分布", () => {
+    const r = calcEV(input({ atr: null, currentPrice: null }));
+    for (const v of [r.pBull, r.pBase, r.pBear, r.rBull, r.rBase, r.rBear]) {
+      expect(v).toBeNull();
+    }
+  });
+
+  it("評分本身仍算得出來 —— 它不依賴價格波動", () => {
+    const r = calcEV(input({ atr: null, currentPrice: null, revenueYoY: 70 }));
+    expect(r.evScore).not.toBeNull();
   });
 
   it("三情境報酬率依 ATR 佔股價比例縮放", () => {
@@ -218,9 +261,16 @@ describe("calcEV 交易計畫", () => {
   });
 
   it("期望值訊號依門檻分級", () => {
-    expect(calcEV(input({ atr: null })).evSignal).toBe("watch_positive"); // ev = 0
+    // 先前這一行用 atr: null 取得 ev = 0 來驗 watch_positive —— 那正是
+    // 「算不出來」被當成「算出來是零」的缺陷本身。改用波動極小的真實情境：
+    // ATR 佔股價 0.1%，三情境幅度因此都很小，ev 落在 -1 ~ 3 之間。
+    const flat = calcEV(input({ atr: 0.1, currentPrice: 100 }));
+    expect(flat.ev!).toBeGreaterThan(-1);
+    expect(flat.ev!).toBeLessThanOrEqual(3);
+    expect(flat.evSignal).toBe("watch_positive");
+
     const strong = calcEV(input({ revenueYoY: 70, foreignNet20dShares: 3_000_000, atr: 20 }));
-    expect(strong.ev).toBeGreaterThan(8);
+    expect(strong.ev!).toBeGreaterThan(8);
     expect(strong.evSignal).toBe("strong_buy");
   });
 
@@ -313,8 +363,8 @@ describe("分析週期實際影響交易計畫", () => {
   });
 
   it("期望值隨時間尺度等比放大", () => {
-    expect(long.ev / base.ev).toBeCloseTo(horizonFactor("6m"), 1);
-    expect(short.ev / base.ev).toBeCloseTo(horizonFactor("1m"), 1);
+    expect(long.ev! / base.ev!).toBeCloseTo(horizonFactor("6m"), 1);
+    expect(short.ev! / base.ev!).toBeCloseTo(horizonFactor("1m"), 1);
   });
 
   it("進場區間不受週期影響（是即期問題，不是持有期間問題）", () => {

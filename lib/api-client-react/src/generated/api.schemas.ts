@@ -453,9 +453,9 @@ export const StockDetailResultTrend = {
 } as const;
 
 /**
- * 期望值訊號
+ * 期望值訊號。ev 為 null 時同為 null。
  */
-export type StockDetailResultEvSignal = typeof StockDetailResultEvSignal[keyof typeof StockDetailResultEvSignal];
+export type StockDetailResultEvSignal = typeof StockDetailResultEvSignal[keyof typeof StockDetailResultEvSignal] | null;
 
 
 export const StockDetailResultEvSignal = {
@@ -550,20 +550,20 @@ export interface StockDetailResult {
   /** 綜合評分。實際範圍 -7 到 8（營收 ±3／均線 ±2／外資 ±2／投信 ±0.5／ 籌碼趨勢 ±0.5）。先前文件寫「-7 到 7」是錯的，改版前的真實範圍是 -6.5 到 7.5。三情境機率的分段門檻是 4／2／0／-2，不依賴此上下限。 */
   evScore?: number;
   /** 多頭情境機率（0–1） */
-  pBull?: number;
+  pBull?: number | null;
   /** 基準情境機率（0–1） */
-  pBase?: number;
+  pBase?: number | null;
   /** 空頭情境機率（0–1） */
-  pBear?: number;
+  pBear?: number | null;
   /** 多頭情境預期報酬（%） */
-  rBull?: number;
+  rBull?: number | null;
   /** 基準情境預期報酬（%） */
-  rBase?: number;
+  rBase?: number | null;
   /** 空頭情境預期報酬（%） */
-  rBear?: number;
-  /** 加權期望值 E(V)（%） */
-  ev?: number;
-  /** 期望值訊號 */
+  rBear?: number | null;
+  /** 加權期望值 E(V)（%）。算不出波動（停牌、資料抓取失敗、上市未滿 14 個交易日） 時為 null —— **不得以 0 代替**。0 在排名上勝過任何真的算出負值的標的， 一檔連收盤價都沒有的股票會因此被排到第一列並印成綠色的 0.00%。 */
+  ev?: number | null;
+  /** 期望值訊號。ev 為 null 時同為 null。 */
   evSignal?: StockDetailResultEvSignal;
   /** 價格資料的最後交易日（YYYY-MM-DD） */
   priceAsOf?: string | null;

@@ -192,9 +192,14 @@ export function planPosition(opts: {
   const byCapital = Math.floor(capitalCap / costPerLot);
   const lots = Math.max(0, Math.min(byRisk, byCapital));
 
+  // 資金面連一張都買不起時一律歸咎於資金 —— 畫面會照著 limitedBy 給出
+  // 可執行的指示，而「把單筆風險上限提高到 X」在這種情況下照做仍然買不到。
+  const limitedBy: PositionPlan['limitedBy'] =
+    byCapital === 0 || byCapital < byRisk ? 'capital' : 'risk';
+
   return {
     lots,
-    limitedBy: byRisk <= byCapital ? 'risk' : 'capital',
+    limitedBy,
     costPerLot,
     cost: lots * costPerLot,
     risk: lots * riskPerLot,
