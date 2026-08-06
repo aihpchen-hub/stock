@@ -6,6 +6,34 @@
 
 ---
 
+## 執行狀態（2026-08-06 同日修畢）
+
+P0（6 項）、P1（9 項）、P2（打磨）**全部完成**，分五個提交落在 `main`（未 push）。
+「產品方向」一節（R-16 K 線圖、R-17 payload 分層、R-18 批次端點）**未做** —— 那是新功能與架構改造，非缺陷。
+
+| 提交 | 內容 |
+|---|---|
+| `d178d2e` | R-1 部位改用淨風險、R-5 新股防線、R-4a `ev` 可為 null、`limitedBy` 歸因 |
+| `7c611bc` | R-4b FinMind 失敗可辨識＋`degraded`、R-2 驗證 Gemini 輸出、R-2b ErrorBoundary 與遮罩死結、R-3 失敗卡片、R-12 toast、R-9 免責 |
+| `b05c401` | R-6 除權息不再汙染 ATR 與前瞻驗證，`RULE_VERSION` 3→4 |
+| `ab9f5ff` | R-7 紅漲綠跌、R-8 對比度、R-10 視圖開關、R-11 統計誠實度、R-13~R-15 |
+| `d3a1ff6` | P2：`lib/format.ts` 統一數字格式、快取切日改台北時區、死碼、`lang`/`color-scheme` |
+
+**驗證**：`pnpm test` **567 → 646 通過**（38 檔）、`pnpm run typecheck` 全 workspace 乾淨、`pnpm run build` 成功、建置產物實跑 smoke test（healthz 200／SPA 深層路徑 200／壞輸入 400 帶原因）。
+測試在 `TZ=UTC`、`TZ=Asia/Taipei`、`TZ=America/Los_Angeles` 下都通過 —— 時區缺陷的測試在 UTC 下會紅，那正是它的重點。
+
+**做法**：所有運算層修正都走 TDD（先寫失敗測試、確認它因為真正的缺陷而失敗、再修）。
+純 JSX／樣式的改動（footer、色票、`aria-label`）無法單元測試，靠 typecheck + build + smoke test 驗證。
+為了讓 UI 層的判斷可測，把埋在 685 行元件裡的接線抽成 `lib/position.ts`、`lib/apiError.ts`、
+`lib/verifyStats.ts`、`lib/format.ts` 四個純函式模組 —— 這也順帶消除了「同一個決定被複製四次」這個根因。
+
+**未執行**：README 提到的函式打包驗證
+（`CI=true netlify build --offline` + `unzip -p … | grep -c "as default"`）需要 Windows 開發者模式建立 symlink。
+本次沒有更動函式的相依圖（沒有新增 workspace 套件到函式的 import 鏈），風險低，
+但**部署前建議照 README 跑一次**。
+
+---
+
 ## 0. 先講結論
 
 這個 codebase 的水準明顯高於一般 side project。**567 個測試全綠、33 個測試檔、4.76 秒**，`openapi.yaml` 是真正被遵守的單一真實來源，程式碼裡大量中文註解說明「為什麼這樣做」而非「做了什麼」，而且多數註解記錄的是真實踩過的坑。以下三件事已經做到多數同類產品沒做到的程度：
