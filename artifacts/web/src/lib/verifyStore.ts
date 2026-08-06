@@ -37,6 +37,22 @@ export function saveVerify(summaries: StoredVerify[]): void {
   }
 }
 
+/**
+ * 清掉存下來的驗證結果。
+ *
+ * 必須與清除查詢紀錄綁在一起：那批快照是這份統計唯一的輸入。少了這個，
+ * 使用者清完紀錄之後首頁的「前瞻驗證」整塊會消失（hasRipeHistory 變 false），
+ * 但每張個股卡片仍印著「這套規則（v3）目前實測：達標率 62.5%（已結案 8 筆）」
+ * —— 那 8 筆已經不存在、無法重驗，UI 上也沒有任何路徑可以清掉它。
+ */
+export function clearVerify(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // 隱私模式讀寫都會丟，忽略即可
+  }
+}
+
 export function loadVerify(): StoredVerify[] {
   try {
     const raw = localStorage.getItem(KEY);

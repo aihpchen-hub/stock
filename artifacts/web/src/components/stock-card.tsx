@@ -2,8 +2,10 @@ import React from 'react';
 import { StockInfo, StockDetailResult } from '@workspace/api-client-react';
 import { deriveAdvice, deriveInvalidation } from '@workspace/advice';
 import { RiskSettings } from '@/lib/settings';
-import { SHARES_PER_LOT } from '@/lib/fees';
+import { SHARES_PER_LOT, discountToTenths } from '@/lib/fees';
 import { planPositionFor } from '@/lib/position';
+import { isConclusive } from '@/lib/verifyStats';
+import { Term } from '@/components/term';
 import { TrendingUp, AlertTriangle, Info, Target, ArrowRight, ShieldCheck, ExternalLink } from 'lucide-react';
 import { AdviceBanner } from '@/components/stock/advice-banner';
 import { ChipsPanel } from '@/components/stock/chips-panel';
@@ -195,11 +197,11 @@ export function StockCard({
   });
 
   const signalColors = {
-    strong_buy: 'bg-primary/20 text-primary border-primary/50',
-    buy: 'bg-primary/10 text-primary border-primary/30',
+    strong_buy: 'bg-up/20 text-up border-up/50',
+    buy: 'bg-up/10 text-up border-up/30',
     watch_positive: 'bg-foreground/10 text-foreground border-foreground/20',
     watch_negative: 'bg-foreground/10 text-foreground border-foreground/20',
-    avoid: 'bg-destructive/20 text-destructive border-destructive/50',
+    avoid: 'bg-down/20 text-down border-down/50',
   };
 
   const signalLabels = {
@@ -266,7 +268,12 @@ export function StockCard({
               一檔剛跳空跌破雙均線的高成長股仍可能算出「強烈買進」，
               與同一張卡片上的「已跌破停損，不建議進場」直接互相矛盾。
               評分規則本身屬第二階段，這裡只在前提不成立時不陳述結論。 */}
-          {evSignal && effectiveAdvice.planKind !== 'none' && (
+          {/* 也受 expected_value 開關控制。新手視圖砍掉 E(V) 的理由是
+              「那張機率表未經回測」，但這顆徽章正是由同一個 ev 算出來的 ——
+              先前只藏掉數字卻留下結論，等於把那張未經回測的機率表以最不可
+              辯駁的形式（一個祈使句動詞）留在整張卡片視覺權重最高的角落，
+              而支撐它的數字與三情境機率被藏起來，新手連質疑的材料都沒有。 */}
+          {shows('expected_value') && evSignal && effectiveAdvice.planKind !== 'none' && (
             <div className={`px-3 py-1 rounded-full text-sm font-bold border ${signalColors[evSignal]}`}>
               {signalLabels[evSignal]}
             </div>
@@ -307,11 +314,11 @@ export function StockCard({
         {/* 新手視圖的註解寫「那是他唯一該記住的數字」—— 那就不該印在第三層。
             計畫不成立時不顯示：沒有有效停損，這個數字算不出意義。 */}
         {shows('position_sizing') && position && economics && effectiveAdvice.planKind !== 'none' && (
-          <div className="flex items-baseline justify-between gap-3 bg-destructive/5 border border-destructive/20 rounded-lg px-4 py-3">
+          <div className="flex items-baseline justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
             <span className="text-sm text-muted-foreground">
               {position.lots > 0 ? `照建議買 ${position.lots} 張，最壞會賠` : '每張最壞會賠'}
             </span>
-            <span className="text-xl font-bold font-mono text-destructive">
+            <span className="text-xl font-bold font-mono text-amber-500">
               NT${' '}
               {Math.round(
                 position.lots > 0
@@ -333,9 +340,9 @@ export function StockCard({
               本身有意義），但不再跟操作建議搶第一眼。 */}
           {shows('expected_value') && (
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm text-muted-foreground font-medium">加權期望值 E(V)</span>
+              <span className="text-sm text-muted-foreground font-medium">加權<Term>期望值</Term> E(V)</span>
               {ev != null && (
-                <span className={`text-xl font-bold font-mono ${ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                <span className={`text-xl font-bold font-mono ${ev >= 0 ? 'text-up' : 'text-down'}`}>
                   {ev > 0 ? '+' : ''}{ev.toFixed(2)}%
                 </span>
               )}
@@ -346,10 +353,17 @@ export function StockCard({
               （README「判斷層與計算層分開陳述」那一節有標示），而前瞻驗證是唯一
               能校正那個印象的東西 —— 它先前只出現在首頁，等於把宣稱與檢驗
               放在兩個不同的畫面上。 */}
-          {shows('verified_rate') && verified?.tally.targetRate != null && (
+          {/* 與首頁共用同一個門檻。這裡的說服力更強 —— 它就印在 E(V) 正下方，
+              語氣是「這套規則目前實測」，而新手視圖保留了這一塊。 */}
+          {shows('verified_rate') &&
+            verified?.tally.targetRate != null &&
+            isConclusive(verified.tally.decided) && (
             <div className="text-xs bg-muted/40 border border-border rounded px-2 py-1.5 leading-relaxed">
               <span className="text-muted-foreground">這套規則（v{verified.ruleVersion}）目前實測：</span>
-              <span className="font-bold text-foreground"> 達標率 {verified.tally.targetRate.toFixed(1)}%</span>
+              <span className="font-bold text-foreground">
+                {' '}
+                <Term>達標率</Term> {verified.tally.targetRate.toFixed(1)}%
+              </span>
               <span className="text-muted-foreground">（已結案 {verified.tally.decided} 筆）</span>
               {verified.tally.entryRate != null && (
                 <span className="text-muted-foreground">
@@ -369,9 +383,9 @@ export function StockCard({
                 三情境機率與報酬
               </summary>
               <div className="space-y-2 mt-2">
-                <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-primary" />
+                <ScenarioBar label="多頭" p={pBull} r={rBull} color="bg-up" />
                 <ScenarioBar label="基準" p={pBase} r={rBase} color="bg-muted-foreground" />
-                <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-destructive" />
+                <ScenarioBar label="空頭" p={pBear} r={rBear} color="bg-down" />
               </div>
             </details>
           )}
@@ -538,6 +552,19 @@ export function StockCard({
                     <div className="font-mono font-medium">NT$ {position.cost.toLocaleString()}</div>
                   </div>
                 </div>
+
+                {/* 這三個數字是使用者從未同意過的預設值算出來的：可動用資金
+                    100 萬、單筆最大虧損 2 萬、單檔上限 30%。帳戶裡只有 10 萬
+                    的人會看到「建議 3 張／投入 285,000」，而整個分析頁先前
+                    沒有一個字提到那 100 萬，也沒有任何路徑可以在原地改。
+                    從查詢紀錄點回舊快照的路徑更是連首頁那四個欄位都沒經過。 */}
+                <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border pt-2">
+                  依你的設定計算：可動用資金 NT$ {settings.capital.toLocaleString()}、
+                  單筆最大虧損 NT$ {settings.riskBudget.toLocaleString()}、
+                  單檔上限 {Math.round(settings.maxPositionPct * 100)}%、
+                  手續費 {discountToTenths(settings.feeDiscount)} 折。
+                  <a href="/" className="underline ml-1 hover:text-foreground">改設定</a>
+                </p>
                 
                 {/* 扣費後才是實際到手的賠率，因此排在前面。毛值是價差算出來的，
                     而下單要付兩趟手續費與一趟證交稅 —— 先印毛值等於系統性地
@@ -546,13 +573,13 @@ export function StockCard({
                 {netRiskReward != null && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground flex items-center gap-1">
-                      風報比（扣費後）:{' '}
-                      <strong className={netRiskReward < 1 ? 'text-destructive' : 'text-foreground'}>
+                      <Term>風報比</Term>（扣費後）:{' '}
+                      <strong className={netRiskReward < 1 ? 'text-amber-500' : 'text-foreground'}>
                         {netRiskReward.toFixed(2)}
                       </strong>
                     </span>
                     <span className="text-muted-foreground flex items-center gap-1">
-                      單張最大虧損: <strong className="text-destructive font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
+                      單張最大虧損: <strong className="text-amber-500 font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
                     </span>
                   </div>
                 )}
@@ -581,7 +608,7 @@ export function StockCard({
                     先前警示只看毛值，這四檔正好落在縫裡：畫面把淨值標紅，
                     卻沒有一個字說明發生了什麼事，而那恰恰是最需要說明的一種。 */}
                 {netRiskReward != null && netRiskReward < 1 && (
-                  <div className="text-xs text-destructive/90 bg-destructive/10 p-2 rounded">
+                  <div className="text-xs text-amber-500/90 bg-amber-500/10 p-2 rounded">
                     {riskRewardRatio != null && riskRewardRatio >= 1 ? (
                       <>
                         ⚠️ 賠率被交易成本翻面：帳面風報比 {riskRewardRatio.toFixed(2)} 看似有利，
@@ -654,6 +681,13 @@ export function StockCard({
                     )}
                   </div>
                 )}
+
+                {/* 決策點的免責一句話。全站 footer 那份講的是整個網站，
+                    這一句就貼在「建議張數／投入金額」正下方 —— 這裡才是
+                    使用者真的可能照著下單的地方。不受 profile 控制。 */}
+                <p className="text-[11px] text-muted-foreground/90 leading-relaxed">
+                  以上為依你的設定與固定規則算出的模擬部位，非投資建議；下單與損益由你自行判斷承擔。
+                </p>
               </div>
             )}
 
@@ -661,7 +695,7 @@ export function StockCard({
                 不知道什麼時候該承認這次判斷錯了 —— 而後者才是真正會虧錢的那一半。
                 既然如此，它就不該是全卡最小最灰的一塊。 */}
             {shows('invalidation') && (
-              <div className="border-l-2 border-destructive/40 bg-destructive/5 rounded-r-lg pl-3 pr-3 py-2.5 space-y-1">
+              <div className="border-l-2 border-amber-500/40 bg-amber-500/5 rounded-r-lg pl-3 pr-3 py-2.5 space-y-1">
                 <div className="text-sm font-bold text-foreground">這份計畫何時失效</div>
                 <div className="text-xs text-foreground/80">{effectiveInvalidation.priceReason}</div>
                 <div className="text-xs text-foreground/80">{effectiveInvalidation.expiryReason}</div>
@@ -690,7 +724,7 @@ function ScenarioBar({ label, p, r, color }: { label: string, p?: number | null,
         <div className={`h-full ${color}`} style={{ width: `${width}%` }} />
       </div>
       <div className="w-12 text-right font-mono text-xs">{Math.round(p * 100)}%</div>
-      <div className={`w-16 text-right font-mono font-medium ${r >= 0 ? 'text-primary' : 'text-destructive'}`}>
+      <div className={`w-16 text-right font-mono font-medium ${r >= 0 ? 'text-up' : 'text-down'}`}>
         {r > 0 ? '+' : ''}{r.toFixed(1)}%
       </div>
     </div>
@@ -699,8 +733,8 @@ function ScenarioBar({ label, p, r, color }: { label: string, p?: number | null,
 
 function MetricCard({ label, value, isPositive }: { label: string, value: string, isPositive?: boolean }) {
   let colorClass = 'text-foreground';
-  if (isPositive === true) colorClass = 'text-primary';
-  if (isPositive === false) colorClass = 'text-destructive';
+  if (isPositive === true) colorClass = 'text-up';
+  if (isPositive === false) colorClass = 'text-down';
 
   return (
     <div className="bg-muted/30 border border-border p-3 rounded-lg flex flex-col justify-center">

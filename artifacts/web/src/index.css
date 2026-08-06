@@ -39,6 +39,21 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
+  /*
+   * 漲跌的語意色。
+   *
+   * 這是台股工具，而台灣投資人在券商 App、證交所網站、財經台上，
+   * 紅一律是漲、綠一律是跌 —— 那是幾十年訓練出來的反射。先前整站用
+   * --primary（青綠）表示漲、--destructive（紅）表示跌，也就是美股慣例，
+   * 掃視期望值排名表時 +3.42% 是綠的、-1.87% 是紅的，紅色那幾列會被
+   * 讀成「最強」。
+   *
+   * 刻意不直接改 --primary / --destructive：前者兼品牌色、按鈕與焦點環，
+   * 後者要留給真正的錯誤與破壞性動作（清除全部、表單驗證）。
+   */
+  --color-up: hsl(var(--up));
+  --color-down: hsl(var(--down));
+
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
@@ -104,6 +119,10 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
+  /* 台股慣例：紅漲綠跌 */
+  --up: 0 74% 45%;
+  --down: 160 84% 28%;
+
   --input: 214 32% 91%;
   --ring: 164 100% 35%;
 
@@ -134,11 +153,11 @@
 
   --background: 222 47% 5%;
   --foreground: 224 100% 97%;
-  --border: 222 29% 15%;
+  --border: 222 22% 24%;
 
   --card: 220 41% 10%;
   --card-foreground: 224 100% 97%;
-  --card-border: 222 29% 15%;
+  --card-border: 222 22% 24%;
 
   --sidebar: 220 41% 10%;
   --sidebar-foreground: 224 100% 97%;
@@ -160,7 +179,13 @@
   --secondary-foreground: 224 100% 97%;
 
   --muted: 222 29% 15%;
-  --muted-foreground: 222 17% 50%;
+  /*
+   * 全站所有 text-xs 與 text-[11px] 的說明文字都用這個顏色，小字加低對比
+   * 是雙重打擊。原本 50% 的亮度實測對 --card 只有 4.03:1、對 --background
+   * 4.40:1、對 bg-muted 3.55:1，三者都低於 WCAG AA 的 4.5:1。
+   * 62% 之後對 --card 是 6.22:1、對 bg-muted 5.47:1。
+   */
+  --muted-foreground: 222 17% 62%;
 
   --accent: 220 100% 62%;
   --accent-foreground: 224 100% 97%;
@@ -168,7 +193,20 @@
   --destructive: 355 100% 64%;
   --destructive-foreground: 224 100% 97%;
 
-  --input: 222 29% 15%;
+  /*
+   * 台股慣例：紅漲綠跌。
+   * 實測對 --card：up #f65a5a 5.64:1、down #12d393 9.29:1，兩者皆過 AA。
+   */
+  --up: 0 90% 66%;
+  --down: 160 84% 45%;
+
+  /*
+   * 輸入框邊界屬於 WCAG 1.4.11 的「使用者介面元件」，需要 3:1。
+   * 原本與 --border 同值（對 --card 僅 1.14:1），欄位框幾乎看不見。
+   * 42% 之後是 3.07:1。--border 只用於裝飾性分隔線，不適用該條，
+   * 但仍從 15% 提到 24% 讓卡片邊界看得出來。
+   */
+  --input: 222 16% 42%;
   --ring: 165 100% 39%;
 }
 

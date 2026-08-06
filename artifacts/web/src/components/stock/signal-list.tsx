@@ -5,14 +5,14 @@ import { TrendingUp, TrendingDown, Minus, ArrowUpRight, ArrowDownRight, MoveRigh
 type Trend = NonNullable<StockDetailResult['trend']>;
 
 const DIRECTION: Record<Signal['direction'], { Icon: typeof TrendingUp; className: string }> = {
-  bullish: { Icon: TrendingUp, className: 'text-primary border-primary/30 bg-primary/5' },
-  bearish: { Icon: TrendingDown, className: 'text-destructive border-destructive/30 bg-destructive/5' },
+  bullish: { Icon: TrendingUp, className: 'text-up border-up/30 bg-up/5' },
+  bearish: { Icon: TrendingDown, className: 'text-down border-down/30 bg-down/5' },
   neutral: { Icon: Minus, className: 'text-muted-foreground border-border bg-muted/30' },
 };
 
 const TRENDS: Record<Trend, { Icon: typeof ArrowUpRight; label: string; className: string }> = {
-  uptrend: { Icon: ArrowUpRight, label: '上升趨勢', className: 'text-primary' },
-  downtrend: { Icon: ArrowDownRight, label: '下降趨勢', className: 'text-destructive' },
+  uptrend: { Icon: ArrowUpRight, label: '上升趨勢', className: 'text-up' },
+  downtrend: { Icon: ArrowDownRight, label: '下降趨勢', className: 'text-down' },
   range: { Icon: MoveRight, label: '區間整理', className: 'text-muted-foreground' },
 };
 

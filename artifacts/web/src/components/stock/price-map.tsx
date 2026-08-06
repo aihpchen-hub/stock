@@ -21,13 +21,13 @@ interface Style {
 }
 
 const STYLES: Record<PriceMapKey, Style> = {
-  take_profit: { line: 'border-primary', text: 'text-primary', dashed: false },
-  first_target: { line: 'border-primary/60', text: 'text-primary/80', dashed: true },
+  take_profit: { line: 'border-up', text: 'text-up', dashed: false },
+  first_target: { line: 'border-up/60', text: 'text-up/80', dashed: true },
   entry_high: { line: 'border-primary/50', text: 'text-foreground/80', dashed: true },
   entry_low: { line: 'border-primary/50', text: 'text-foreground/80', dashed: true },
   current: { line: 'border-foreground', text: 'text-foreground font-bold', dashed: false },
-  stop_loss: { line: 'border-destructive', text: 'text-destructive', dashed: false },
-  trailing_stop: { line: 'border-destructive/50', text: 'text-destructive/80', dashed: true },
+  stop_loss: { line: 'border-down', text: 'text-down', dashed: false },
+  trailing_stop: { line: 'border-down/50', text: 'text-down/80', dashed: true },
   ma20: { line: 'border-muted-foreground/40', text: 'text-muted-foreground', dashed: true },
   ma60: { line: 'border-muted-foreground/40', text: 'text-muted-foreground', dashed: true },
   swing_high: { line: 'border-muted-foreground/25', text: 'text-muted-foreground/70', dashed: true },

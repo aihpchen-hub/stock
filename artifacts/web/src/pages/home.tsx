@@ -6,16 +6,31 @@ import { useHistory } from '@/hooks/use-history';
 import { formatHistoryTime, HistoryMeta } from '@/lib/history';
 import { AnalyzeRequestPeriod, useVerifyOutcomes } from '@workspace/api-client-react';
 import { buildVerifyGroups, isRipe, OUTCOME_LABEL } from '@/lib/verify';
-import { loadVerify, saveVerify, type StoredVerify } from '@/lib/verifyStore';
+import { clearVerify, loadVerify, saveVerify, type StoredVerify } from '@/lib/verifyStore';
 import { NumberField } from '@/components/number-field';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toast } from '@/hooks/use-toast';
 import { apiErrorMessage } from '@/lib/apiError';
+import { MIN_DECIDED, isConclusive, mergeTallies, wilson95 } from '@/lib/verifyStats';
 import {
   MAX_ALLOWED_POSITION_PCT,
   MAX_FEE_DISCOUNT,
   MIN_FEE_DISCOUNT,
   MIN_POSITION_PCT,
 } from '@/lib/settings';
+
+/** 後端 outcome.ts 的 MAX_ITEMS。超過就分批，不讓它靜默截斷 */
+const VERIFY_BATCH = 40;
 
 const CHIPS = [
   'AI水冷散熱', '矽光子', 'CoWoS封裝', 'HBM記憶體', '伺服器供應鏈', 'AI PC', '散熱模組', '電源管理IC'
@@ -59,14 +74,29 @@ export default function Home() {
         });
         return;
       }
-      // 逐版本各打一次 —— 後端一次最多收 40 筆，而不同規則算出來的計畫
-      // 合併統計會得到一個量不到任何東西的達標率
+      // 逐版本各打一次 —— 不同規則算出來的計畫合併統計會得到一個
+      // 量不到任何東西的達標率。
+      //
+      // 每個版本再依 40 筆分批：後端的 MAX_ITEMS 是 40，超過的部分先前被
+      // 靜默截斷，而且截掉的是**最舊**（最可能已結案）的那些。累積三個月
+      // 的使用者有 200 筆計畫，畫面上五格加總卻永遠是 40，且 open 與
+      // noEntry 被系統性放大 —— 用得越久，decided 反而不會增加。
       const summaries: StoredVerify[] = await Promise.all(
-        groups.map(async (g) => ({
-          ruleVersion: g.ruleVersion,
-          tally: (await verifyOutcomes.mutateAsync({ data: { items: g.items } })).tally,
-          verifiedAt: Date.now(),
-        })),
+        groups.map(async (g) => {
+          const batches: (typeof g.items)[] = [];
+          for (let i = 0; i < g.items.length; i += VERIFY_BATCH) {
+            batches.push(g.items.slice(i, i + VERIFY_BATCH));
+          }
+          const parts = await Promise.all(
+            batches.map((items) => verifyOutcomes.mutateAsync({ data: { items } })),
+          );
+          return {
+            ruleVersion: g.ruleVersion,
+            // 比率由合併後的分子分母重算，不是把各批的百分比平均
+            tally: mergeTallies(parts.map((p) => p.tally)),
+            verifiedAt: Date.now(),
+          };
+        }),
       );
       saveVerify(summaries);
       setVerifyResults(summaries);
@@ -212,6 +242,7 @@ export default function Home() {
                   退格到剩一位數時舊值立刻被寫回，最後一位刪不掉。 */}
               <NumberField
                 label="可動用資金 (NT$)"
+                description="帳戶裡現在能拿來買股票的現金，不是總資產"
                 value={settings.capital}
                 onCommit={(capital) => updateSettings({ capital })}
                 min={1}
@@ -219,6 +250,7 @@ export default function Home() {
               />
               <NumberField
                 label="單筆最大虧損 (NT$)"
+                description="這一筆若在停損價出場，你願意賠掉的金額"
                 value={settings.riskBudget}
                 onCommit={(riskBudget) => updateSettings({ riskBudget })}
                 min={1}
@@ -228,6 +260,7 @@ export default function Home() {
                 <NumberField
                   label="單檔上限 (%)"
                   hint="1~100"
+                  description="一檔最多投入可動用資金的幾成"
                   value={settings.maxPositionPct * 100}
                   onCommit={(pct) => updateSettings({ maxPositionPct: pct / 100 })}
                   min={MIN_POSITION_PCT * 100}
@@ -236,6 +269,7 @@ export default function Home() {
                 <NumberField
                   label="手續費折扣 (折)"
                   hint="1~10"
+                  description="跟券商談到的折數。10 折＝無折扣（預設值偏保守）"
                   value={settings.feeDiscount * 10}
                   onCommit={(tenths) => updateSettings({ feeDiscount: tenths / 10 })}
                   min={MIN_FEE_DISCOUNT * 10}
@@ -281,10 +315,23 @@ export default function Home() {
                         規則 v{ruleVersion}
                       </span>
                     </div>
-                    <span className="text-2xl font-bold text-primary">
-                      {/* targetRate 後端已經是百分比（3/4 回 75），不可再乘 100 */}
-                      {tally.targetRate != null ? `${tally.targetRate.toFixed(1)}%` : '尚無結論'}
-                    </span>
+                    {/* 已結案筆數不足時不給百分比。n=1 的 100.0% 先前用
+                        text-2xl 印在這裡，還會出現在當天查的每一張卡片上，
+                        語氣是「這套規則目前實測」—— 那是全站唯一宣稱
+                        「已驗證」的數字，卻是最沒有統計效力的那個。 */}
+                    {isConclusive(tally.decided) && tally.targetRate != null ? (
+                      <span className="text-2xl font-bold text-foreground">
+                        {/* targetRate 後端已經是百分比（3/4 回 75），不可再乘 100 */}
+                        {tally.targetRate.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground text-right">
+                        樣本不足
+                        <span className="block text-[11px]">
+                          已結案 {tally.decided} 筆，需 {MIN_DECIDED} 筆
+                        </span>
+                      </span>
+                    )}
                   </div>
                   {/* 成立率必須與達標率並列。達標率的分母只算已分出勝負的筆數，
                       單獨看會讓「大部分計畫從未觸發進場」完全看不見 ——
@@ -298,6 +345,23 @@ export default function Home() {
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
                     達標率的分母只算已分出勝負的 {tally.decided} 筆；成立率算的是價格確實
                     進入過進場區的 {tally.entered ?? 0} 筆。兩者分母不同，不能相乘。
+                    {/* 點估計值不講區間就是在假裝精確。20 筆時區間仍有
+                        ±20 個百分點 —— 讓那個寬度自己說話。 */}
+                    {isConclusive(tally.decided) &&
+                      (() => {
+                        const ci = wilson95(tally.target, tally.decided);
+                        if (!ci) return null;
+                        return (
+                          <>
+                            {' '}
+                            以目前的樣本數，達標率的 95% 信賴區間是{' '}
+                            {ci[0].toFixed(0)}%~{ci[1].toFixed(0)}%。
+                          </>
+                        );
+                      })()}
+                    {!isConclusive(tally.decided) && (
+                      <> 樣本門檻 {MIN_DECIDED} 筆是經驗值，未經驗證。</>
+                    )}
                   </p>
                 </div>
                 {/* 五格而非三格：未進場與同日觸及兩者先前完全沒顯示，
@@ -305,11 +369,11 @@ export default function Home() {
                     使用者手上 50 筆紀錄而畫面只加得出 10 筆，差額沒有一個字解釋。 */}
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 text-center text-sm">
                   <div className="bg-muted rounded p-2">
-                    <div className="text-primary font-bold">{tally.target}</div>
+                    <div className="text-up font-bold">{tally.target}</div>
                     <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['target']}</div>
                   </div>
                   <div className="bg-muted rounded p-2">
-                    <div className="text-destructive font-bold">{tally.stop}</div>
+                    <div className="text-down font-bold">{tally.stop}</div>
                     <div className="text-muted-foreground text-xs mt-1">{OUTCOME_LABEL['stop']}</div>
                   </div>
                   <div className="bg-muted rounded p-2">
@@ -345,12 +409,37 @@ export default function Home() {
               <History className="w-5 h-5 text-primary" />
               <h2 className="text-2xl font-bold">查詢紀錄</h2>
             </div>
-            <button
-              onClick={clearHistory}
-              className="text-sm text-destructive hover:underline"
-            >
-              清除全部
-            </button>
+            {/* 先前是一個沒有確認、沒有 undo、沒有匯出的紅色小字 ——
+                手指滑過就是 50 筆快照沒了，而每一筆都花了 16~20 秒才跑出來，
+                且它們是前瞻驗證唯一的輸入。專案裡裝好了 alert-dialog 卻沒用。 */}
+            <AlertDialog>
+              <AlertDialogTrigger className="text-sm text-destructive hover:underline">
+                清除全部
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>清除全部查詢紀錄？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    將刪除 {history.length} 筆快照，無法復原。前瞻驗證的達標率也會一併歸零 ——
+                    那份統計要重新累積數週才會再出現。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      clearHistory();
+                      // 統計的輸入沒了，統計本身就不該留著 —— 否則卡片上
+                      // 會繼續印一個無法重驗、也無處可清的達標率。
+                      clearVerify();
+                      setVerifyResults(null);
+                    }}
+                  >
+                    清除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           <div className="space-y-4">
@@ -393,16 +482,21 @@ function HistoryGroup({ keyword, items, onRemove }: { keyword: string, items: Hi
       {expanded && (
         <div className="border-t border-border divide-y divide-border">
           {items.map(item => (
-            <div key={item.id} className="p-4 flex items-center justify-between hover:bg-muted/10 group">
-              <div
-                className="flex-1 cursor-pointer"
+            <div key={item.id} className="flex items-stretch justify-between hover:bg-muted/10 group">
+              {/* 主要動作先前掛在 <div onClick> 上，沒有 role、沒有 tabIndex、
+                  也沒有 onKeyDown —— 鍵盤與螢幕閱讀器使用者永遠打不開任何一筆
+                  歷史分析。而那一列唯一可聚焦的元素是下面那顆 opacity-0 的
+                  刪除鈕：按 Enter 想「打開」，實際是「刪除」。 */}
+              <button
+                type="button"
+                className="flex-1 p-4 text-left cursor-pointer"
                 onClick={() => setLocation(`/analysis?snapshotId=${item.id}`)}
               >
                 <div className="flex items-center gap-3 mb-1">
                   <span className="text-sm text-muted-foreground">{formatHistoryTime(item.createdAt)}</span>
                   <span className="text-xs border border-border rounded px-1.5 py-0.5 bg-background text-muted-foreground uppercase">{item.period}</span>
-                  {item.sentiment === 'bullish' && <span className="text-primary text-xs font-medium">● 看多</span>}
-                  {item.sentiment === 'bearish' && <span className="text-destructive text-xs font-medium">● 看空</span>}
+                  {item.sentiment === 'bullish' && <span className="text-up text-xs font-medium">▲ 看多</span>}
+                  {item.sentiment === 'bearish' && <span className="text-down text-xs font-medium">▼ 看空</span>}
                   {item.sentiment === 'neutral' && <span className="text-foreground text-xs font-medium">● 盤整</span>}
                 </div>
                 {item.topCode && (
@@ -410,19 +504,26 @@ function HistoryGroup({ keyword, items, onRemove }: { keyword: string, items: Hi
                     <span className="text-muted-foreground">領先標的:</span>
                     <span className="font-bold text-accent">{item.topName} ({item.topCode})</span>
                     {item.topEv != null && (
-                      <span className={`font-mono font-medium ${item.topEv >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                      <span className={`font-mono font-medium ${item.topEv >= 0 ? 'text-up' : 'text-down'}`}>
                         E(V) {item.topEv > 0 ? '+' : ''}{(item.topEv).toFixed(2)}%
                       </span>
                     )}
                   </div>
                 )}
-              </div>
+              </button>
+              {/* opacity-0 不會關掉 pointer events —— 這顆按鈕先前在手機上是
+                  「看不見但完全點得到」，手指落在列的右緣就靜默刪掉一筆花了
+                  16~20 秒才跑出來的分析，沒有確認也沒有 undo。
+                  改成只在真的支援 hover 的裝置上才隱藏，並補上可讀名稱與
+                  44px 觸控區。 */}
               <button
+                type="button"
+                aria-label={`刪除 ${formatHistoryTime(item.createdAt)} 這筆紀錄`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove(item.id);
                 }}
-                className="p-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                className="m-2 p-2 min-w-11 min-h-11 flex items-center justify-center rounded text-muted-foreground hover:text-destructive transition-all [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               >
                 <X className="w-4 h-4" />
               </button>

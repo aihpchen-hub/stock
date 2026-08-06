@@ -9,6 +9,15 @@ interface NumberFieldProps extends CommitOptions {
   onCommit: (value: number) => void;
   /** 範圍說明，例如「1~100」 */
   hint?: string;
+  /**
+   * 這個欄位是什麼意思。
+   *
+   * settings.ts 的註解裡本來就寫好了白話說明（「帳戶裡現在能買股票的現金，
+   * 不是總資產」），但只有讀原始碼的人看得到 —— 畫面上四個標題並排，
+   * 新手分不出「單筆最大虧損」與「單檔上限」的差別，而這兩個值直接決定
+   * 卡片上印出來的建議張數。
+   */
+  description?: string;
 }
 
 /**
@@ -30,12 +39,17 @@ export function NumberField({
   value,
   onCommit,
   hint,
+  description,
   min,
   max,
   integer,
 }: NumberFieldProps) {
   const [draft, setDraft] = React.useState(() => toDraft(value));
   const [editing, setEditing] = React.useState(false);
+  // 標籤與輸入框先前沒有關聯 —— 螢幕閱讀器唸不出這個欄位叫什麼，
+  // 點標籤也不會聚焦到欄位（那是所有人都預期得到的行為，不只無障礙）。
+  const id = React.useId();
+  const describedBy = description ? `${id}-desc` : undefined;
 
   // 外部值變動時同步回草稿，但編輯中不覆蓋 —— 否則使用者打到一半
   // 會被另一個來源的更新洗掉。
@@ -52,11 +66,18 @@ export function NumberField({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm text-muted-foreground block">
+      <label htmlFor={id} className="text-sm text-muted-foreground block">
         {label}
         {hint && <span className="ml-1 text-xs opacity-70">({hint})</span>}
       </label>
+      {description && (
+        <p id={describedBy} className="text-xs text-muted-foreground/90 leading-relaxed">
+          {description}
+        </p>
+      )}
       <input
+        id={id}
+        aria-describedby={describedBy}
         type="text"
         inputMode={integer ? 'numeric' : 'decimal'}
         // 讓 iOS 顯示數字鍵盤而非全鍵盤

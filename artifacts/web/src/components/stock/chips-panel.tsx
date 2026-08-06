@@ -19,12 +19,12 @@ const WINDOWS: Array<{ key: WindowKey; label: string }> = [
  * 而那正是單一 30 日累積會蓋掉的東西。
  */
 const TRENDS: Record<InvestorChips['trend'], { label: string; className: string }> = {
-  accumulating: { label: '持續加碼', className: 'text-primary' },
+  accumulating: { label: '持續加碼', className: 'text-up' },
   slowing: { label: '買盤退潮', className: 'text-amber-500' },
-  reversing_down: { label: '近期轉賣', className: 'text-destructive' },
-  distributing: { label: '持續減碼', className: 'text-destructive' },
+  reversing_down: { label: '近期轉賣', className: 'text-down' },
+  distributing: { label: '持續減碼', className: 'text-down' },
   easing: { label: '賣壓趨緩', className: 'text-amber-500' },
-  reversing_up: { label: '近期轉買', className: 'text-primary' },
+  reversing_up: { label: '近期轉買', className: 'text-up' },
   neutral: { label: '無明顯方向', className: 'text-muted-foreground' },
   insufficient_data: { label: '資料不足', className: 'text-muted-foreground' },
 };
@@ -44,7 +44,7 @@ function formatLots(shares: number | null | undefined): string {
 
 function lotsClass(shares: number | null | undefined): string {
   if (shares == null || !Number.isFinite(shares) || shares === 0) return 'text-muted-foreground';
-  return shares > 0 ? 'text-primary' : 'text-destructive';
+  return shares > 0 ? 'text-up' : 'text-down';
 }
 
 interface ChipsPanelProps {

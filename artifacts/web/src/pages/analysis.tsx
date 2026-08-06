@@ -15,7 +15,7 @@ import { rankByStrength } from '@/lib/groupStrength';
 import { queriedCode, queriedIdentity } from '@/lib/queriedStock';
 import { newsAge } from '@/lib/newsAge';
 import { ProfileSwitcher } from '@/components/profile-switcher';
-import { DEFAULT_PROFILE, VIEW_CONFIG, type ViewProfile } from '@workspace/view-profile';
+import { DEFAULT_PROFILE, VIEW_CONFIG, shows, type ViewProfile } from '@workspace/view-profile';
 
 const PROFILE_KEY = 'view_profile_v1';
 
@@ -419,7 +419,10 @@ export default function Analysis() {
           {/* 手機端不顯示。這張表的五個欄位（代號、公司、現價、E(V)、訊號）
               在下方每張卡片上都會再出現一次，而它唯一的附加價值是「橫向比較」——
               窄螢幕一次只看得到一列，那個價值不成立，剩下的就只是重複一次。 */}
-          {sortedStocks.length >= 2 && (
+          {/* 整張表也受 expected_value 開關控制 —— 表頭與訊號欄都是 E(V) 的產物。
+              新手視圖切掉了卡片上的 E(V)，卻讓這張表在頁面更上方以五檔並排的
+              形式呈現同一組結論，而新手是最不會主動去按切換器的那一群。 */}
+          {shows(profile, 'expected_value') && sortedStocks.length >= 2 && (
             <section className="space-y-4 hidden md:block">
               <h2 className="text-xl font-bold">期望值排名</h2>
               {/* 排名表只列得出有明細的那幾檔。少了這一行，5 檔裡有 2 檔抓失敗時
@@ -482,12 +485,12 @@ export default function Analysis() {
                           <td className="px-4 py-3 text-right font-mono">
                             {d.currentPrice ?? '—'}
                           </td>
-                          <td className={`px-4 py-3 text-right font-mono font-medium ${d.ev >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                          <td className={`px-4 py-3 text-right font-mono font-medium ${d.ev >= 0 ? 'text-up' : 'text-down'}`}>
                             {d.ev > 0 ? '+' : ''}{d.ev.toFixed(2)}%
                           </td>
                           <td className="px-4 py-3 text-center">
                             {advice.planKind === 'none' ? (
-                              <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded border border-destructive/30">
+                              <span className="text-xs bg-amber-500/10 text-amber-500 px-2 py-1 rounded border border-amber-500/30">
                                 不建議進場
                               </span>
                             ) : (
@@ -605,14 +608,14 @@ export default function Analysis() {
 function SentimentBadge({ sentiment }: { sentiment: string }) {
   if (sentiment === 'bullish') {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/20 text-primary rounded-md font-bold text-sm border border-primary/30">
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-up/20 text-up rounded-md font-bold text-sm border border-up/30">
         <TrendingUp className="w-4 h-4" /> 看多
       </div>
     );
   }
   if (sentiment === 'bearish') {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1 bg-destructive/20 text-destructive rounded-md font-bold text-sm border border-destructive/30">
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-down/20 text-down rounded-md font-bold text-sm border border-down/30">
         <TrendingDown className="w-4 h-4" /> 看空
       </div>
     );

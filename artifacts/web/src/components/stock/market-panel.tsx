@@ -47,7 +47,7 @@ export function MarketPanel({ returns, relativeStrength, market, groupRank }: Ma
         {rs20 != null && (
           <span
             className={`font-mono font-bold text-sm shrink-0 flex items-center gap-1 ${
-              beating ? 'text-primary' : 'text-destructive'
+              beating ? 'text-up' : 'text-down'
             }`}
           >
             {beating ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -63,8 +63,8 @@ export function MarketPanel({ returns, relativeStrength, market, groupRank }: Ma
           <span className="font-mono font-medium shrink-0">
             第 {groupRank.rank} / {groupRank.total} 強
           </span>
-          {groupRank.leader && <span className="text-xs text-primary shrink-0">族群最強</span>}
-          {groupRank.laggard && <span className="text-xs text-destructive shrink-0">族群最弱</span>}
+          {groupRank.leader && <span className="text-xs text-up shrink-0">▲ 族群最強</span>}
+          {groupRank.laggard && <span className="text-xs text-down shrink-0">▼ 族群最弱</span>}
         </div>
       )}
 
