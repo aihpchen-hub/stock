@@ -1,7 +1,14 @@
 import { Router } from "express";
 
 import { buildUrl, fetchFinMind } from "../lib/finmind";
-import { evaluateOutcome, tallyOutcomes, type Bar, type OutcomeKind } from "../lib/outcome";
+import {
+  evaluateOutcome,
+  tallyOutcomes,
+  type Bar,
+  type ExDividend,
+  type OutcomeKind,
+} from "../lib/outcome";
+import type { DividendResultRow } from "../lib/dividend";
 
 const router = Router();
 
@@ -88,15 +95,53 @@ router.post("/outcomes", async (req, res) => {
       return p;
     };
 
+    /**
+     * 除息造成的價格斷層。抓的是原始股價，除息當天整條序列會往下跳一個
+     * 股利的幅度 —— 持有的人拿到的是現金而不是虧損，但 bar.min 確實跌破了
+     * 停損價，於是一筆配息會被判成 "stop"。台股除息季是 7~9 月，而達標率
+     * 是校正那張未經回測機率表的唯一手段。
+     *
+     * 每個代號多一個請求，但同樣依代號去重，而這支端點使用者一天最多按幾次。
+     */
+    const uniqueDividends = new Map<string, Promise<ExDividend[]>>();
+    const fetchDividends = (code: string, from: string) => {
+      const key = `${code}|${from}`;
+      let p = uniqueDividends.get(key);
+      if (!p) {
+        p = fetchFinMind<DividendResultRow>(
+          buildUrl("TaiwanStockDividendResult", code, from, token),
+        ).then((rows) =>
+          rows
+            .filter(
+              (r): r is DividendResultRow & { before_price: number; after_price: number } =>
+                typeof r.date === "string" &&
+                typeof r.before_price === "number" &&
+                typeof r.after_price === "number",
+            )
+            .map((r) => ({ date: r.date, drop: r.before_price - r.after_price }))
+            .filter((d) => d.drop > 0),
+        );
+        uniqueDividends.set(key, p);
+      }
+      return p;
+    };
+
     const results: VerifyResponseItem[] = await Promise.all(
       items.map(async (it) => {
-        const bars = await fetchBars(it.code, it.from);
-        const r = evaluateOutcome(bars, {
-          entryLow: it.entryLow,
-          entryHigh: it.entryHigh,
-          stopLoss: it.stopLoss,
-          takeProfit: it.takeProfit,
-        });
+        const [bars, dividends] = await Promise.all([
+          fetchBars(it.code, it.from),
+          fetchDividends(it.code, it.from),
+        ]);
+        const r = evaluateOutcome(
+          bars,
+          {
+            entryLow: it.entryLow,
+            entryHigh: it.entryHigh,
+            stopLoss: it.stopLoss,
+            takeProfit: it.takeProfit,
+          },
+          dividends,
+        );
         return {
           code: it.code,
           from: it.from,

@@ -169,3 +169,44 @@ describe("tallyOutcomes", () => {
     expect(tallyOutcomes([]).entryRate).toBeNull();
   });
 });
+
+describe("除息跳空不算停損", () => {
+  // 計畫：98~100 進場，停損 90、停利 115（與上方同一組）
+  // 2026-01-05 除息 8 元：除息前收 99、除息後參考價 91。
+  const bars = [
+    bar("2026-01-02", 97, 101),
+    bar("2026-01-03", 97, 100),
+    bar("2026-01-05", 89, 92), // 除息當天，最低 89 跌破停損 90
+    bar("2026-01-06", 90, 93),
+  ];
+  const div = [{ date: "2026-01-05", drop: 8 }];
+
+  it("未提供除息資料時被判成停損（現況）", () => {
+    expect(evaluateOutcome(bars, plan).kind).toBe("stop");
+  });
+
+  it("提供除息資料後不再判成停損 —— 那不是虧損，是配息落袋", () => {
+    // 除息季在 7~9 月，而達標率是這個產品用來校正那張未經回測機率表的
+    // 唯一手段。把配息判成停損會系統性壓低它。
+    const r = evaluateOutcome(bars, plan, div);
+    expect(r.kind).toBe("open");
+    expect(r.exitDate).toBeNull();
+  });
+
+  it("除息之外真的跌破停損時仍然判停損", () => {
+    // 除息 8 元後又再跌到 80：還原後是 88，確實低於停損 90
+    const crash = [...bars.slice(0, 3), bar("2026-01-06", 80, 84)];
+    expect(evaluateOutcome(crash, plan, div).kind).toBe("stop");
+  });
+
+  it("除息後的停利門檻同步下移，不會因此永遠達不到", () => {
+    // 除息 8 元後漲到 108：還原後是 116，已達停利 115
+    const rally = [...bars.slice(0, 3), bar("2026-01-06", 105, 108)];
+    expect(evaluateOutcome(rally, plan, div).kind).toBe("target");
+  });
+
+  it("進場之前的除息不影響判定", () => {
+    const early = [{ date: "2026-01-01", drop: 8 }];
+    expect(evaluateOutcome(bars, plan, early).kind).toBe("stop");
+  });
+});

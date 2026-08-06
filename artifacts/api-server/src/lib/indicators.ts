@@ -45,8 +45,22 @@ export function calcReturn(closes: number[], days: number): number | null {
  * True Range 取「當日高低差」「當日高與前收之差」「當日低與前收之差」三者最大值，
  * 因此跳空缺口也會被計入 —— 這正是停損距離需要涵蓋的風險。
  * 資料不足 period+1 根時回傳 null。
+ *
+ * `exDates` 是除權息日（YYYY-MM-DD）。這些日子的跳空**不是風險**：
+ * 股利離開股價與公司基本面無關，把它算進去會讓一檔 100 元、殖利率 7% 的股票
+ * 在除息後 14 個交易日內 ATR 憑空墊高約 18%，停損距離同步拉寬、建議張數少約 15%。
+ * 台股除息季集中在 7~9 月，而「存股」視圖的標的正好全是高殖利率股。
+ * 當天仍取日內高低差 —— 除息當天真的大跌時，那一段是真的波動。
+ *
+ * 用的是 FinMind 的原始股價（TaiwanStockPrice）而非還原股價（…Adj）。
+ * 換資料集是更徹底的解法，但需要不同的權限層級，且會一次改動所有既有數字；
+ * 這裡先用已經抓回來的除息日把最傷的那一項修掉。
  */
-export function calcATR(rows: PriceRow[], period = 14): number | null {
+export function calcATR(
+  rows: PriceRow[],
+  period = 14,
+  exDates?: ReadonlySet<string>,
+): number | null {
   if (rows.length < period + 1) return null;
 
   const trueRanges: number[] = [];
@@ -55,6 +69,10 @@ export function calcATR(rows: PriceRow[], period = 14): number | null {
     const prev = rows[i - 1];
     if (!cur || !prev) continue;
     if (![cur.max, cur.min, prev.close].every((v) => typeof v === "number" && isFinite(v))) continue;
+    if (exDates?.has(cur.date)) {
+      trueRanges.push(cur.max - cur.min);
+      continue;
+    }
     trueRanges.push(
       Math.max(
         cur.max - cur.min,

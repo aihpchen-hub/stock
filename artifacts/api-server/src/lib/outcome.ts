@@ -62,6 +62,19 @@ export interface PlanToVerify {
 }
 
 /**
+ * 一次除權息造成的價格斷層。
+ *
+ * `drop` 直接取 FinMind DividendResultRow 的 before_price − after_price ——
+ * 那是交易所公告的除息參考價落差，不必自己從現金股利推算，也自動涵蓋除權。
+ */
+export interface ExDividend {
+  /** 除息交易日（YYYY-MM-DD） */
+  date: string;
+  /** 除息前收盤價減除息參考價 */
+  drop: number;
+}
+
+/**
  * 判定一筆計畫的結果。
  *
  * 進場條件也一併驗證：計畫寫的是「等回檔到 entryLow~entryHigh 才進場」，
@@ -74,7 +87,11 @@ export interface PlanToVerify {
  * 同一根 K 線同時觸及停利與停損時回 ambiguous 而非二選一 —— 日線資料就是不知道，
  * 猜一個會讓統計出來的命中率偏向猜的那一邊。
  */
-export function evaluateOutcome(bars: Bar[], plan: PlanToVerify): OutcomeResult {
+export function evaluateOutcome(
+  bars: Bar[],
+  plan: PlanToVerify,
+  dividends?: ReadonlyArray<ExDividend>,
+): OutcomeResult {
   const usable = bars.filter(
     (b) => Number.isFinite(b.max) && Number.isFinite(b.min) && b.max >= b.min,
   );
@@ -84,8 +101,32 @@ export function evaluateOutcome(bars: Bar[], plan: PlanToVerify): OutcomeResult 
   if (!(entryLow > 0) || !(entryHigh >= entryLow)) return EMPTY;
   if (!(stopLoss > 0) || !(takeProfit > stopLoss)) return EMPTY;
 
+  /**
+   * 把除息造成的價格斷層加回去。
+   *
+   * 抓回來的是原始股價（TaiwanStockPrice），除息當天整條序列會往下跳一個
+   * 股利的幅度。持有的人拿到的是現金，不是虧損 —— 但 bar.min 確實跌破了
+   * 停損價，於是一筆配息會被判成 "stop"。台股除息季集中在 7~9 月，而
+   * 達標率是這個產品用來校正那張未經回測機率表的唯一手段，這個誤判會
+   * 系統性地把它壓低。
+   *
+   * 只採計序列**開始之後**的除息：更早的那些已經內含在整段序列裡，
+   * 當初做這份計畫時看到的價位也已經反映過了。
+   */
+  const seriesStart = usable[0]!.date;
+  const applicable = (dividends ?? [])
+    .filter((d) => typeof d.date === "string" && d.date > seriesStart && d.drop > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  /** 這根 K 線要加回多少才回到計畫當時的價格尺度 */
+  const offsetAt = (date: string): number =>
+    applicable.reduce((sum, d) => (d.date <= date ? sum + d.drop : sum), 0);
+
   // 價格區間與進場區間有重疊即視為可成交
-  const entryIndex = usable.findIndex((b) => b.min <= entryHigh && b.max >= entryLow);
+  const entryIndex = usable.findIndex((b) => {
+    const off = offsetAt(b.date);
+    return b.min + off <= entryHigh && b.max + off >= entryLow;
+  });
   if (entryIndex === -1) {
     return { ...EMPTY, kind: "no_entry" };
   }
@@ -94,19 +135,22 @@ export function evaluateOutcome(bars: Bar[], plan: PlanToVerify): OutcomeResult 
   const entryMid = (entryLow + entryHigh) / 2;
   const after = usable.slice(entryIndex + 1);
 
-  let maxHigh = entryBar.max;
-  let minLow = entryBar.min;
+  let maxHigh = entryBar.max + offsetAt(entryBar.date);
+  let minLow = entryBar.min + offsetAt(entryBar.date);
   let kind: OutcomeKind = "open";
   let exitDate: string | null = null;
   let barsHeld = 0;
 
   for (const bar of after) {
     barsHeld += 1;
-    maxHigh = Math.max(maxHigh, bar.max);
-    minLow = Math.min(minLow, bar.min);
+    const off = offsetAt(bar.date);
+    const high = bar.max + off;
+    const low = bar.min + off;
+    maxHigh = Math.max(maxHigh, high);
+    minLow = Math.min(minLow, low);
 
-    const hitTarget = bar.max >= takeProfit;
-    const hitStop = bar.min <= stopLoss;
+    const hitTarget = high >= takeProfit;
+    const hitStop = low <= stopLoss;
 
     if (hitTarget && hitStop) {
       kind = "ambiguous";

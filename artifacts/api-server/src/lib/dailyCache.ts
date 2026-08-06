@@ -57,7 +57,7 @@ export function createDailyCache<T>(store: CacheStore): DailyCache<T> {
 
 /** 關鍵字大小寫與前後空白不該產生不同的快取項 */
 export function analysisCacheKey(keyword: string, period: string): string {
-  return `analysis|${keyword.trim().toLowerCase()}|${period}`;
+  return `analysis|v2|${keyword.trim().toLowerCase()}|${period}`;
 }
 
 /**
@@ -69,7 +69,7 @@ export function analysisCacheKey(keyword: string, period: string): string {
  * 改版時遞增此處的版本號即可讓舊項目自然失效。
  */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|v6|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v7|${code.trim().toLowerCase()}|${period}`;
 }
 
 /**

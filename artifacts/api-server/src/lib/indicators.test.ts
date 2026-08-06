@@ -368,3 +368,39 @@ describe("calcReturn", () => {
     expect(calcReturn([100, 110], -3)).toBeNull();
   });
 });
+
+describe("calcATR 排除除權息跳空", () => {
+  /** 指定日期的 bar，方便標出除息日 */
+  function dated(date: string, close: number, max: number, min: number): PriceRow {
+    return { date, close, max, min, Trading_Volume: 1_000_000 };
+  }
+
+  // 一檔 100 元、殖利率 7% 的股票在 2026-07-15 除息。
+  // 平時日振幅約 2 元，除息當天開低 7 元。
+  const rows: PriceRow[] = [
+    dated("2026-07-14", 100, 101, 99),
+    dated("2026-07-15", 93, 94, 92),
+  ];
+
+  it("未標示除息日時，跳空被當成真實風險（現況）", () => {
+    // TR = max(94-92, |94-100|, |92-100|) = 8
+    expect(calcATR(rows, 1)).toBeCloseTo(8, 5);
+  });
+
+  it("標示除息日後只取當日高低差，配息不算波動", () => {
+    // 股利離開股價不是風險。把它算進 ATR 會讓停損距離憑空拉寬約 18%、
+    // 建議張數少約 15%，而公司基本面完全沒變。
+    expect(calcATR(rows, 1, new Set(["2026-07-15"]))).toBeCloseTo(2, 5);
+  });
+
+  it("除息日當天真的大跌時，日內振幅仍然算數", () => {
+    // 除息 7 元，但當天還從 94 殺到 88 —— 那 6 元是真的波動
+    const crash = [dated("2026-07-14", 100, 101, 99), dated("2026-07-15", 88, 94, 88)];
+    expect(calcATR(crash, 1, new Set(["2026-07-15"]))).toBeCloseTo(6, 5);
+  });
+
+  it("非除息日不受影響", () => {
+    expect(calcATR(rows, 1, new Set(["2026-07-14"]))).toBeCloseTo(8, 5);
+    expect(calcATR(rows, 1, new Set())).toBeCloseTo(8, 5);
+  });
+});

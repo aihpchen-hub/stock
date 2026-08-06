@@ -225,7 +225,7 @@ export const StockDetailResponse = zod.object({
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
   "officialIndustry": zod.string().nullish().describe('官方產業類別（證交所／櫃買中心），與 AI 的次產業描述並列對照'),
-  "ruleVersion": zod.number().optional().describe('計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正、 3=評分改用 20 個交易日籌碼並加入趨勢修正。'),
+  "ruleVersion": zod.number().optional().describe('計算規則版本。快照會存下此值，前瞻驗證的統計才不會把不同規則 算出來的結果混進同一個達標率裡。 1=初版（快照中沒有這個欄位者）、2=進場上緣與操作建議修正、 3=評分改用 20 個交易日籌碼並加入趨勢修正、 4=期望值算不出時回 null 而非 0、MA60 不足且跌破月線者不再給即時進場區、 ATR 排除除權息跳空。'),
   "advice": zod.object({
   "action": zod.enum(['can_enter', 'wait_pullback', 'wait_breakout', 'stop_breached', 'insufficient_data']).describe('can_enter=現價落在進場區間內、 wait_pullback=區間在現價之下需等回檔、 wait_breakout=區間在現價之上需等突破、 stop_breached=現價已低於停損、 insufficient_data=缺少必要價位'),
   "planKind": zod.enum(['immediate', 'pullback', 'conditional', 'none']).describe('進場區間相對於現價的位置。 conditional 表示區間在現價之上、計畫尚未成立，畫面必須以 「站回月線後的計畫」而非「建議買價」陳述那組價位； none 表示不得顯示任何價位。')

@@ -56,7 +56,7 @@ const marketCache = dailyCacheFor<MarketContext>();
  * 並同步更新 `stockCacheKey` 的版本前綴 —— 前瞻驗證靠這個值分辨
  * 每筆快照是哪一套規則算出來的。
  */
-const RULE_VERSION = 3;
+const RULE_VERSION = 4;
 
 /**
  * 法人資料的抓取範圍（日曆日）。
@@ -211,7 +211,13 @@ router.get("/stock/:code", async (req, res) => {
     const currentPrice = closes[closes.length - 1] ?? null;
     const ma20 = calcMA(closes, 20);
     const ma60 = calcMA(closes, 60);
-    const atr = calcATR(prices);
+    // 除息日的跳空不是波動，是股利離開股價。這份資料本來就抓回來了
+    // （buildDividend 在用），只是從來沒有餵給指標。台股除息季是 7~9 月，
+    // 少了這一步，高殖利率股在除息後兩週的停損距離會憑空拉寬約 18%。
+    const exDates = new Set(
+      dividendResults.map((d) => d.date).filter((d): d is string => typeof d === "string"),
+    );
+    const atr = calcATR(prices, 14, exDates);
     const priceAsOf = prices[prices.length - 1]?.date ?? null;
     const swing = calcSwing(prices);
     const avgVolume20 = calcAvgVolume(prices);
