@@ -78,7 +78,16 @@
 
 ## 結果
 
-一次分析 **36 → 21** 個請求（−42%），當天重複查詢的個股再降。每小時可支撐的分析次數從 16 提升到 28。
+| | 之前 | 之後 |
+|---|---|---|
+| 首次分析 5 檔新標的 | 36 | **26**（−28%） |
+| 同日再查同一批標的 | 36 | **21**（−42%） |
+
+首次仍有 5 個 `TaiwanStockInfo`，之後當天完全免費。每小時可支撐的分析次數從 16 提升到 23~28。
+
+主流程剩下的網路請求（每檔 4 個）：`TaiwanStockPrice`、`TaiwanStockMonthRevenue`、
+`TaiwanStockInstitutionalInvestorsBuySell`、`TaiwanStockDividendResult`。
+另加兩個日快取：`resolveStock`（每檔每日一次）與 TAIEX（全站每日一次）。
 
 ## 契約變更
 

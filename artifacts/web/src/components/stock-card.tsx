@@ -17,11 +17,7 @@ import type { StoredVerify } from '@/lib/verifyStore';
 import { MarketPanel } from '@/components/stock/market-panel';
 import { PriceMap } from '@/components/stock/price-map';
 import type { GroupRank } from '@/lib/groupStrength';
-import {
-  DividendPanel,
-  FinancialsPanel,
-  ValuationPanel,
-} from '@/components/stock/valuation-panel';
+import { FundamentalsPanels } from '@/components/stock/valuation-panel';
 import { maSignalText, viewFor, type ViewProfile } from '@workspace/view-profile';
 
 /** degraded 是後端的資料集代號，畫面要講使用者認得的名字 */
@@ -422,9 +418,16 @@ export function StockCard({
 
           {/* 估值三塊只有價值與存股視圖看得到。財報走延後載入 ——
               只有真的切到那些視圖時才發請求。 */}
-          {shows('valuation') && <ValuationPanel valuation={valuation} />}
-          {shows('dividend') && <DividendPanel dividend={dividend} />}
-          {shows('financials') && <FinancialsPanel code={code} enabled={shows('financials')} />}
+          {/* 估值、股利、財報共用一次延後載入 —— 三者都只有價值與存股視圖需要，
+              而預設視圖是新手。valuation／dividend 傳的是舊快照的退路。 */}
+          <FundamentalsPanels
+            code={code}
+            showValuation={shows('valuation')}
+            showDividend={shows('dividend')}
+            showFinancials={shows('financials')}
+            fallbackValuation={valuation}
+            fallbackDividend={dividend}
+          />
         </div>
 
         {/* Financial Metrics */}

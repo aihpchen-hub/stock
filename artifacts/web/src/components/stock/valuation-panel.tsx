@@ -225,3 +225,66 @@ export function FinancialsPanel({ code, enabled }: { code: string; enabled: bool
     </div>
   );
 }
+
+/**
+ * 價值與存股視圖的三個面板，共用一次延後載入。
+ *
+ * 估值與股利先前放在 `/stock/:code` 的主流程，等於每次分析都為兩個少數視圖
+ * 多發 10 個 FinMind 請求 —— 而預設視圖是新手，兩者都不看。搬到這裡之後，
+ * 只有真的切到那些視圖的人才會付這個成本。
+ *
+ * 三個面板共用同一個 query：TanStack 本來就會依 queryKey 去重，但寫成一個
+ * 元件才看得出「它們是同一次請求的三種呈現」。
+ *
+ * `fallback*` 是 localStorage 裡的舊快照 —— 那時這兩份資料還在個股 payload
+ * 上。與 `advice`／`invalidation`／`chips` 同一套向後相容做法：優先用剛抓到的，
+ * 沒有就用快照存下的。
+ */
+export function FundamentalsPanels({
+  code,
+  showValuation,
+  showDividend,
+  showFinancials,
+  fallbackValuation,
+  fallbackDividend,
+}: {
+  code: string;
+  showValuation: boolean;
+  showDividend: boolean;
+  showFinancials: boolean;
+  fallbackValuation?: StockDetailResult['valuation'];
+  fallbackDividend?: StockDetailResult['dividend'];
+}) {
+  const enabled = showValuation || showDividend || showFinancials;
+
+  // 用 options getter 再覆寫 enabled／staleTime：產生出來的 hook 把 query 選項
+  // 型別成完整的 UseQueryOptions（要求 queryKey），傳部分選項過不了型別檢查。
+  // 財報是季頻、估值是日頻，半天內不必重抓。
+  const { data, isPending } = useQuery({
+    ...getStockFundamentalsQueryOptions(code),
+    enabled,
+    staleTime: 12 * 60 * 60 * 1000,
+  });
+
+  if (!enabled) return null;
+
+  const valuation = data?.valuation ?? fallbackValuation;
+  const dividend = data?.dividend ?? fallbackDividend;
+
+  // 還在抓、而且沒有舊快照可退回時給一個佔位，避免版面在資料到位時整塊跳動
+  if (isPending && !valuation && !dividend) {
+    return (
+      <div className="bg-muted/30 border border-border rounded-lg p-3">
+        <div className="h-4 bg-muted rounded w-1/3 animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {showValuation && <ValuationPanel valuation={valuation} />}
+      {showDividend && <DividendPanel dividend={dividend} />}
+      {showFinancials && <FinancialsPanel code={code} enabled={showFinancials} />}
+    </>
+  );
+}

@@ -69,7 +69,7 @@ export function analysisCacheKey(keyword: string, period: string): string {
  * 改版時遞增此處的版本號即可讓舊項目自然失效。
  */
 export function stockCacheKey(code: string, period: string): string {
-  return `stock|v8|${code.trim().toLowerCase()}|${period}`;
+  return `stock|v9|${code.trim().toLowerCase()}|${period}`;
 }
 
 /**
@@ -90,7 +90,7 @@ export function stockInfoCacheKey(code: string): string {
  * 多抓幾次無妨；少抓才是問題（發布當天拿到舊資料）。
  */
 export function fundamentalsCacheKey(code: string): string {
-  return `fundamentals|v1|${code.trim().toLowerCase()}`;
+  return `fundamentals|v2|${code.trim().toLowerCase()}`;
 }
 
 /**

@@ -189,7 +189,7 @@ export const StockDetailResponse = zod.object({
   "maSignal": zod.enum(['above_both', 'above_ma20', 'below_both', 'insufficient_data']).optional().describe('加權指數自身的均線位置，判定方式與個股相同。below_both 代表大盤跌破 雙均線，此時個股停損被觸發的機率上升且會同時發生 —— 畫面上 「分散五檔」的保護在系統性下跌時並不成立。'),
   "asOf": zod.string().nullish().describe('大盤資料的最後日期。與個股未必同步，因此各自標示。')
 }).nullish().describe('當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。'),
-  "valuation": zod.object({
+  "valuation": zod.union([zod.object({
   "per": zod.object({
   "current": zod.number().nullish(),
   "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
@@ -215,8 +215,8 @@ export const StockDetailResponse = zod.object({
   "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
 }),
   "asOf": zod.string().nullish()
-}).optional(),
-  "dividend": zod.object({
+}),zod.null()]).optional().describe('\*\*已移到 \/stock\/{code}\/fundamentals。\*\* 這裡保留只為了讀得懂 localStorage 裡的舊快照 —— 新的回應一律為 null。 前端優先用延後載入的結果，退回快照存下的值。'),
+  "dividend": zod.union([zod.object({
   "consecutiveYears": zod.number().describe('從最新年度往回數的連續配息年數。不是「有配息的年數」—— 實測 2412 中華電 2009 年缺席，總年數 21 但連續只有 17。'),
   "latestYear": zod.string().nullish(),
   "latestCash": zod.number().nullish().describe('最近一個有配息年度的現金股利合計（季配會有多筆）'),
@@ -224,7 +224,7 @@ export const StockDetailResponse = zod.object({
   "coverageFrom": zod.string().nullish().describe('資料涵蓋的最早年度。文案只能寫「N 年起」，不得宣稱完整歷史。'),
   "filled": zod.number().describe('填息成功次數'),
   "filledTotal": zod.number().describe('可判定的除息次數（缺價位者不計）')
-}).optional(),
+}),zod.null()]).optional().describe('\*\*已移到 \/stock\/{code}\/fundamentals。\*\* 保留理由同 valuation。'),
   "foreignNetDays": zod.number().nullish().describe('外資30日淨買超相當於幾日平均成交量'),
   "trustNetDays": zod.number().nullish().describe('投信30日淨買超相當於幾日平均成交量'),
   "stockName": zod.string().nullish().describe('官方公司簡稱（證交所／櫃買中心），可用於核對 AI 給的名稱'),
@@ -276,8 +276,44 @@ export const StockFundamentalsResponse = zod.object({
   "debtRatio": zod.number().nullish(),
   "fcf": zod.number().nullish().describe('自由現金流 = 營運現金流 − 資本支出')
 })).describe('由新到舊'),
-  "asOf": zod.string().nullish().describe('最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。')
-})
+  "asOf": zod.string().nullish().describe('最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。'),
+  "valuation": zod.union([zod.object({
+  "per": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "pbr": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "dividendYield": zod.object({
+  "current": zod.number().nullish(),
+  "percentile": zod.number().nullish().describe('目前值高於歷史樣本的百分比（0~100）。第 80 百分位代表過去五年有 八成的時間比現在便宜。樣本少於 2 筆時為 null —— 一個點構不成區間。'),
+  "low": zod.number().nullish(),
+  "median": zod.number().nullish(),
+  "high": zod.number().nullish(),
+  "samples": zod.number().describe('實際參與計算的樣本數，讓畫面能標明區間的可信度')
+}),
+  "asOf": zod.string().nullish()
+}),zod.null()]).optional().describe('PER／PBR／殖利率的五年區間百分位。抓取失敗時為 null。'),
+  "dividend": zod.union([zod.object({
+  "consecutiveYears": zod.number().describe('從最新年度往回數的連續配息年數。不是「有配息的年數」—— 實測 2412 中華電 2009 年缺席，總年數 21 但連續只有 17。'),
+  "latestYear": zod.string().nullish(),
+  "latestCash": zod.number().nullish().describe('最近一個有配息年度的現金股利合計（季配會有多筆）'),
+  "avgCash5y": zod.number().nullish(),
+  "coverageFrom": zod.string().nullish().describe('資料涵蓋的最早年度。文案只能寫「N 年起」，不得宣稱完整歷史。'),
+  "filled": zod.number().describe('填息成功次數'),
+  "filledTotal": zod.number().describe('可判定的除息次數（缺價位者不計）')
+}),zod.null()]).optional().describe('連續配息年數與填息紀錄。抓取失敗時為 null。')
+}).describe('價值與存股視圖需要的全部資料，一次取回。估值與股利在此而非 \/stock\/{code} 的主流程，理由與財報三表相同 —— 只有 value 與 dividend 兩個視圖需要，而預設視圖是 newbie，兩者都不看。 主流程因此每檔少發兩個 FinMind 請求（一次分析少 10 個）。')
 
 
 /**

@@ -2,8 +2,10 @@ import { Router } from "express";
 
 import { dailyCacheFor } from "../lib/caches";
 import { fundamentalsCacheKey, today } from "../lib/dailyCache";
-import { buildUrl, dateMinusMonths, fetchFinMind } from "../lib/finmind";
+import { buildUrl, dateMinusDays, dateMinusMonths, fetchFinMind } from "../lib/finmind";
 import { buildFinancials, type Financials, type StatementRow } from "../lib/financials";
+import { buildValuation, type PerRow } from "../lib/valuation";
+import { buildDividend, type DividendResultRow, type DividendRow } from "../lib/dividend";
 
 /**
  * 財報三表，**延後載入**。
@@ -14,11 +16,20 @@ import { buildFinancials, type Financials, type StatementRow } from "../lib/fina
  *
  * 財報是季頻、更新慢，而且只有 value 與 dividend 兩個視圖需要 ——
  * 由前端在使用者真的切到那些視圖時才請求，是這裡唯一划算的做法。
+ *
+ * 估值（PER）與股利（Dividend）後來也搬進來，理由完全相同：查 VIEW_CONFIG
+ * 可證，valuation 與 dividend 兩個區塊只出現在 value 與 dividend 視圖，
+ * 而預設視圖是 newbie，兩者都不看。先前它們留在主流程，等於每次分析
+ * 都為兩個少數視圖多發 10 個 FinMind 請求 —— 而 402 是每小時總量用盡，
+ * 減少總量是唯一有效的做法。
  */
 const router = Router();
 
 /** 三年約 12 季，足以看出毛利率與 ROE 的趨勢而不必抓整段歷史 */
 const FUNDAMENTALS_MONTHS = 36;
+
+/** 五年日頻的估值序列；股利要拉滿全部歷史才數得出連續配息年數 */
+const VALUATION_FETCH_DAYS = 1830;
 
 const fundamentalsCache = dailyCacheFor<Financials>();
 
@@ -37,7 +48,7 @@ router.get("/stock/:code/fundamentals", async (req, res) => {
 
   try {
     const start = dateMinusMonths(FUNDAMENTALS_MONTHS);
-    const [income, balance, cashflow] = await Promise.all([
+    const [income, balance, cashflow, perRows, dividendRows, dividendResults] = await Promise.all([
       fetchFinMind<StatementRow>(
         buildUrl("TaiwanStockFinancialStatements", code, start, token),
       ),
@@ -45,13 +56,30 @@ router.get("/stock/:code/fundamentals", async (req, res) => {
       fetchFinMind<StatementRow>(
         buildUrl("TaiwanStockCashFlowsStatement", code, start, token),
       ),
+      fetchFinMind<PerRow>(
+        buildUrl("TaiwanStockPER", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
+      ),
+      fetchFinMind<DividendRow>(buildUrl("TaiwanStockDividend", code, "1990-01-01", token)),
+      fetchFinMind<DividendResultRow>(
+        buildUrl("TaiwanStockDividendResult", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
+      ),
     ]);
 
-    const financials = buildFinancials(income, balance, cashflow);
+    const valuation = perRows.length > 0 ? buildValuation(perRows) : null;
+    const dividend =
+      dividendRows.length > 0 || dividendResults.length > 0
+        ? buildDividend(dividendRows, dividendResults)
+        : null;
 
-    // 只快取有內容的結果。三張表全空時多半是抓取失敗或代號無財報，
+    const financials: Financials = {
+      ...buildFinancials(income, balance, cashflow),
+      valuation,
+      dividend,
+    };
+
+    // 只快取有內容的結果。三者全空時多半是抓取失敗或代號無資料，
     // 把空結果鎖成當天的答案會讓使用者一整天都看不到資料。
-    if (financials.quarters.length > 0) {
+    if (financials.quarters.length > 0 || valuation !== null || dividend !== null) {
       await fundamentalsCache.set(cacheKey, day, financials);
     }
 

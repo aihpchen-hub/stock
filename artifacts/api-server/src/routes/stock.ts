@@ -35,8 +35,7 @@ import {
   buildReturns,
   type MarketContext,
 } from "../lib/market";
-import { buildValuation, type PerRow } from "../lib/valuation";
-import { buildDividend, type DividendResultRow, type DividendRow } from "../lib/dividend";
+import type { DividendResultRow } from "../lib/dividend";
 
 const router = Router();
 
@@ -150,12 +149,9 @@ router.get("/stock/:code", async (req, res) => {
     // name/industry so the client can cross-check the model's free-text labels
     // against the exchange's own classification.
     //
-    // 150 個日曆日 ≈ 102 個交易日。原本的 100 日只有約 68 個交易日，MA60 僅多 8 根，
-    // 遇到連假或暫停交易就可能算不出來。
-    // 估值走五年日頻（約 1,461 筆），股利拉滿全部歷史 —— 連續配息年數
-    // 必須看得到最早的斷層才算得對。這三個資料集格式扁平、直接可用，
-    // 因此併入主流程；財報三表是長格式且季頻，走獨立端點延後載入。
-    const VALUATION_FETCH_DAYS = 1830;
+    // 除息紀錄的抓取範圍（日曆日）。ATR 只需要近期的除息日，但五年份是同一次
+    // 請求的成本，多抓不虧，且未來要放寬 ATR 週期時不必再改。
+    const DIVIDEND_FETCH_DAYS = 1830;
 
     const [
       priceResult,
@@ -163,8 +159,6 @@ router.get("/stock/:code", async (req, res) => {
       institutionalResult,
       info,
       market,
-      perRows,
-      dividendRows,
       dividendResults,
     ] = await Promise.all([
       // 這三個資料集直接決定評分。它們用 fetchFinMindResult 是因為
@@ -174,15 +168,15 @@ router.get("/stock/:code", async (req, res) => {
       fetchFinMindResult<InstitutionalRow>(
         buildUrl("TaiwanStockInstitutionalInvestorsBuySell", code, dateMinusDays(CHIPS_FETCH_DAYS), token),
       ),
+      // 公司基本資料以日快取，同一檔當天之後完全不發請求
       resolveStock(code),
       // 與個股平行抓，不佔用額外的往返時間；命中日快取時完全不發請求
       getMarketContext(day, token),
-      fetchFinMind<PerRow>(
-        buildUrl("TaiwanStockPER", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
-      ),
-      fetchFinMind<DividendRow>(buildUrl("TaiwanStockDividend", code, "1990-01-01", token)),
+      // 除息日：ATR 要用它把配息造成的跳空排除掉，那是每一種視圖都受影響的計算。
+      // PER 與 Dividend 已移到 /stock/:code/fundamentals —— 它們只餵
+      // value／dividend 兩個視圖，而預設視圖是 newbie。
       fetchFinMind<DividendResultRow>(
-        buildUrl("TaiwanStockDividendResult", code, dateMinusDays(VALUATION_FETCH_DAYS), token),
+        buildUrl("TaiwanStockDividendResult", code, dateMinusDays(DIVIDEND_FETCH_DAYS), token),
       ),
     ]);
 
@@ -450,8 +444,8 @@ router.get("/stock/:code", async (req, res) => {
       market,
       // 估值只放統計結果，不放 1,461 筆原始序列 —— 那會讓五檔的回應
       // 多出約 675 KB，而它還要進 localStorage 快照。
-      valuation: buildValuation(perRows),
-      dividend: buildDividend(dividendRows, dividendResults),
+      // valuation 與 dividend 已移到 /stock/:code/fundamentals。
+      // 契約上仍保留這兩個欄位，但只為了讀得懂 localStorage 裡的舊快照。
       // Net flow expressed in days of average volume — "+91 lots" means nothing
       // without knowing whether the stock trades 100 or 100,000 lots a day.
       foreignNetDays:

@@ -226,11 +226,18 @@ export interface QuarterMetrics {
   fcf?: number | null;
 }
 
+/**
+ * 價值與存股視圖需要的全部資料，一次取回。估值與股利在此而非 /stock/{code} 的主流程，理由與財報三表相同 —— 只有 value 與 dividend 兩個視圖需要，而預設視圖是 newbie，兩者都不看。 主流程因此每檔少發兩個 FinMind 請求（一次分析少 10 個）。
+ */
 export interface Financials {
   /** 由新到舊 */
   quarters: QuarterMetrics[];
   /** 最新一季的財報日期。財報季頻且發布有延遲，畫面必須標示。 */
   asOf?: string | null;
+  /** PER／PBR／殖利率的五年區間百分位。抓取失敗時為 null。 */
+  valuation?: Valuation | null;
+  /** 連續配息年數與填息紀錄。抓取失敗時為 null。 */
+  dividend?: DividendSummary | null;
 }
 
 export interface OutcomeTally {
@@ -623,8 +630,16 @@ export interface StockDetailResult {
   relativeStrength?: Returns | null;
   /** 當日大盤脈絡。抓不到時為 null，畫面整塊不渲染。 */
   market?: MarketContext | null;
-  valuation?: Valuation;
-  dividend?: DividendSummary;
+  /**
+     * **已移到 /stock/{code}/fundamentals。** 這裡保留只為了讀得懂 localStorage 裡的舊快照 —— 新的回應一律為 null。 前端優先用延後載入的結果，退回快照存下的值。
+     * @deprecated
+     */
+  valuation?: Valuation | null;
+  /**
+     * **已移到 /stock/{code}/fundamentals。** 保留理由同 valuation。
+     * @deprecated
+     */
+  dividend?: DividendSummary | null;
   /** 外資30日淨買超相當於幾日平均成交量 */
   foreignNetDays?: number | null;
   /** 投信30日淨買超相當於幾日平均成交量 */

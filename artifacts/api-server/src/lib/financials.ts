@@ -14,6 +14,9 @@
  * 這些數字取代了「護城河敘述」：模型的形容詞不可驗算，毛利率五年趨勢可以。
  */
 
+import type { Valuation } from "./valuation";
+import type { DividendSummary } from "./dividend";
+
 export interface StatementRow {
   date: string;
   type: string;
@@ -46,6 +49,14 @@ export interface Financials {
   /** 由新到舊 */
   quarters: QuarterMetrics[];
   asOf: string | null;
+  /**
+   * 估值區間百分位。與財報同一個延後載入端點 —— 兩者都只有 value 與
+   * dividend 視圖需要，而預設視圖是 newbie。留在主流程等於每次分析
+   * 為兩個少數視圖多發 5 個 FinMind 請求。抓取失敗時為 null。
+   */
+  valuation?: Valuation | null;
+  /** 連續配息年數與填息紀錄。理由同 valuation */
+  dividend?: DividendSummary | null;
 }
 
 /** 長格式 → Map<date, Map<type, value>> */
