@@ -56,6 +56,40 @@ describe('planOddLot 求最大股數', () => {
   });
 });
 
+describe('掃描各種價格與停損距離，不變式都成立', () => {
+  // 單一手算案例驗不出二分搜尋的邊界錯誤 —— off-by-one 只在特定的
+  // 「剛好卡在低消翻轉點」或「上限剛好整除」的組合上才會現形。
+  const prices = [11.5, 50, 137, 499, 1000, 1385, 3020];
+  const stopPcts = [0.02, 0.05, 0.085, 0.14, 0.3];
+  const budgets = [400, 5_000, 20_000, 120_000];
+
+  it('回傳的股數永遠是滿足兩個上限的最大值', () => {
+    let checked = 0;
+    for (const entryPrice of prices) {
+      for (const stopPct of stopPcts) {
+        const stopLoss = entryPrice * (1 - stopPct);
+        for (const riskBudget of budgets) {
+          const plan = planOddLot({ entryPrice, stopLoss, riskBudget, capital: 1_000_000 });
+          if (plan === null) continue;
+          checked += 1;
+
+          const loss = (n: number) => Math.abs(netPnl(entryPrice, stopLoss, n, 1));
+          expect(plan.shares).toBeGreaterThanOrEqual(1);
+          expect(loss(plan.shares)).toBeLessThanOrEqual(riskBudget);
+          expect(plan.shares * entryPrice).toBeLessThanOrEqual(plan.capitalCap);
+
+          // 再多一股就必須違反其中一個上限，否則就不是最大值
+          const next = plan.shares + 1;
+          const stillFits = loss(next) <= riskBudget && next * entryPrice <= plan.capitalCap;
+          expect(stillFits).toBe(false);
+        }
+      }
+    }
+    // 掃描本身要有掃到東西，否則這條測試等於什麼都沒驗
+    expect(checked).toBeGreaterThan(100);
+  });
+});
+
 describe('planOddLot 回 null 的情況', () => {
   it('停損不低於進場價', () => {
     // netPnl 在這種輸入下是獲利，取絕對值後仍然單調，
