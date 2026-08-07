@@ -6,11 +6,15 @@ import {
   SHARES_PER_LOT,
   TAX_RATE,
   breakevenPrice,
+  buyOutlay,
   buyOutlayPerLot,
   discountToTenths,
   lotEconomics,
+  netPnl,
   netPnlPerLot,
   roundTripCostPct,
+  roundTripCostPctFor,
+  sellProceeds,
   sellProceedsPerLot,
 } from './fees';
 
@@ -193,5 +197,51 @@ describe('discountToTenths', () => {
   it('無效值顯示為無折扣', () => {
     expect(discountToTenths(Number.NaN)).toBe('10');
     expect(discountToTenths(0)).toBe('10');
+  });
+});
+
+describe('以股數為單位的成本計算', () => {
+  it('1000 股的結果與 per-lot 函式完全一致', () => {
+    expect(buyOutlay(100, SHARES_PER_LOT)).toBe(buyOutlayPerLot(100));
+    expect(sellProceeds(100, SHARES_PER_LOT)).toBe(sellProceedsPerLot(100));
+    expect(netPnl(100, 110, SHARES_PER_LOT)).toBe(netPnlPerLot(100, 110));
+    expect(buyOutlay(1, SHARES_PER_LOT, 0.1)).toBe(buyOutlayPerLot(1, 0.1));
+  });
+
+  it('零股金額小時由 20 元低消主導，而非費率', () => {
+    // 5 股 × 1000 元 = 5,000 元，費率算出僅 7.125 元
+    expect(buyOutlay(1000, 5)).toBeCloseTo(5000 + MIN_BROKERAGE, 6);
+  });
+
+  it('低消讓小部位的虧損遠高於「每張 ÷ 1000」的縮放值', () => {
+    // 這一條就是零股不能按比例縮放的理由：低消是固定成本，
+    // 縮放會系統性低估，而低估成本會讓看似能賺的交易實際上是賠的。
+    const scaled = Math.abs(netPnlPerLot(1000, 915.4)) / SHARES_PER_LOT;
+    const real = Math.abs(netPnl(1000, 915.4, 1));
+    expect(scaled).toBeCloseTo(90.08, 1);
+    expect(real).toBeCloseTo(127.35, 1);
+    expect(real).toBeGreaterThan(scaled * 1.4);
+  });
+});
+
+describe('roundTripCostPctFor', () => {
+  it('整股金額下與費率式的 roundTripCostPct 一致', () => {
+    expect(roundTripCostPctFor(1000, 222)).toBeCloseTo(roundTripCostPct(), 6);
+    expect(roundTripCostPctFor(1000, 222)).toBeCloseTo(0.585, 3);
+  });
+
+  it('低消綁住時遠高於費率式的值', () => {
+    // 1 股 × 1000 元：買 20 ＋ 賣 20 ＋ 稅 3 = 43，佔 4.3%
+    expect(roundTripCostPctFor(1000, 1)).toBeCloseTo(4.3, 6);
+  });
+
+  it('折扣不折證交稅，所以佔比降不到零', () => {
+    expect(roundTripCostPctFor(1000, 222, 0.28)).toBeCloseTo(roundTripCostPct(0.28), 6);
+  });
+
+  it('價格或股數非正值時回 0，不產生 NaN 或 Infinity', () => {
+    expect(roundTripCostPctFor(1000, 0)).toBe(0);
+    expect(roundTripCostPctFor(0, 100)).toBe(0);
+    expect(roundTripCostPctFor(1000, -5)).toBe(0);
   });
 });

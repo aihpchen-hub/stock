@@ -39,21 +39,46 @@ function brokerage(value: number, discount?: number | null): number {
   return Math.max(value * BROKERAGE_RATE * safeDiscount(discount), MIN_BROKERAGE);
 }
 
+/**
+ * 買進 n 股的實際支出（含手續費）。
+ *
+ * 以股數而非張數為單位，是因為 MIN_BROKERAGE 是**固定成本**：
+ * 零股部位金額小的時候它才是主要成本，按張縮放會系統性低估。
+ */
+export function buyOutlay(price: number, shares: number, discount?: number | null): number {
+  const value = price * shares;
+  return value + brokerage(value, discount);
+}
+
+/** 賣出 n 股的實際入帳（扣手續費與證交稅） */
+export function sellProceeds(price: number, shares: number, discount?: number | null): number {
+  const value = price * shares;
+  return value - brokerage(value, discount) - value * TAX_RATE;
+}
+
+/** 在某個出場價，n 股的淨損益（正為獲利、負為虧損） */
+export function netPnl(
+  entry: number,
+  exit: number,
+  shares: number,
+  discount?: number | null,
+): number {
+  return sellProceeds(exit, shares, discount) - buyOutlay(entry, shares, discount);
+}
+
 /** 買進一張的實際支出（含手續費） */
 export function buyOutlayPerLot(price: number, discount?: number | null): number {
-  const value = price * SHARES_PER_LOT;
-  return value + brokerage(value, discount);
+  return buyOutlay(price, SHARES_PER_LOT, discount);
 }
 
 /** 賣出一張的實際入帳（扣手續費與證交稅） */
 export function sellProceedsPerLot(price: number, discount?: number | null): number {
-  const value = price * SHARES_PER_LOT;
-  return value - brokerage(value, discount) - value * TAX_RATE;
+  return sellProceeds(price, SHARES_PER_LOT, discount);
 }
 
 /** 在某個出場價的每張淨損益（正為獲利、負為虧損） */
 export function netPnlPerLot(entry: number, exit: number, discount?: number | null): number {
-  return sellProceedsPerLot(exit, discount) - buyOutlayPerLot(entry, discount);
+  return netPnl(entry, exit, SHARES_PER_LOT, discount);
 }
 
 /**
@@ -82,6 +107,26 @@ export function discountToTenths(discount: number): string {
 /** 一趟來回的成本佔交易金額的百分比 */
 export function roundTripCostPct(discount?: number | null): number {
   return (BROKERAGE_RATE * safeDiscount(discount) * 2 + TAX_RATE) * 100;
+}
+
+/**
+ * 特定價格與股數下，來回成本佔部位金額的百分比。
+ *
+ * 與 roundTripCostPct 的差別只有一個：低消。費率式的 0.585% 在整股金額下
+ * 正確，但零股部位小於約 NT$14,035 時 20 元低消會接管，實際佔比可以高到 4.3%
+ * （1 股 × NT$1,000）。畫面要印給使用者看的是後者。
+ *
+ * 以進場價買進、同價賣出計算 —— 這是「光是進出一趟就付掉多少」，
+ * 與停利價無關，因此不需要交易計畫的其他數字。
+ */
+export function roundTripCostPctFor(
+  price: number,
+  shares: number,
+  discount?: number | null,
+): number {
+  if (!(price > 0) || !(shares > 0)) return 0;
+  const value = price * shares;
+  return ((brokerage(value, discount) * 2 + value * TAX_RATE) / value) * 100;
 }
 
 export type LotEconomics = {
