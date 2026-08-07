@@ -2,6 +2,7 @@ import { Router } from "express";
 import { deriveAdvice, deriveInvalidation } from "@workspace/advice";
 
 import {
+  buildPriceSeries,
   calcATR,
   calcAvgVolume,
   calcKD,
@@ -224,6 +225,11 @@ router.get("/stock/:code", async (req, res) => {
     const macd = calcMACD(closes);
     const kd = calcKD(prices);
     const volume = calcVolumeProfile(prices);
+    // 價位地圖的走勢線。prices 本來就抓了 240 個日曆日（≈163 根），
+    // 切最後 N 根即可 —— 零額外請求。N 跟著分析週期，
+    // 「這張圖的尺度與你選的持有期一致」本身就可以解釋，
+    // 不必再給卡片加一組控制元件。
+    const priceSeries = buildPriceSeries(prices, PERIOD_TRADING_DAYS[period] ?? 60);
 
     let maSignal: "above_both" | "above_ma20" | "below_both" | "insufficient_data" =
       "insufficient_data";
@@ -435,6 +441,7 @@ router.get("/stock/:code", async (req, res) => {
       swingHigh: swing.high !== null ? Math.round(swing.high * 100) / 100 : null,
       swingLow: swing.low !== null ? Math.round(swing.low * 100) / 100 : null,
       avgVolume20: avgVolume20 !== null ? Math.round(avgVolume20) : null,
+      priceSeries,
       // 個股自身的多天期報酬。相對強弱要用，畫面也直接顯示 —— 少了絕對報酬，
       // 使用者看到「相對大盤 +3%」無從判斷是兩者都漲還是兩者都跌。
       returns: buildReturns(closes),

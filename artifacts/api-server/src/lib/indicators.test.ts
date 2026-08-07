@@ -13,6 +13,7 @@ import {
   calcMACD,
   calcMASlope,
   calcVolumeProfile,
+  buildPriceSeries,
   detectCross,
   emaSeries,
   type PriceRow,
@@ -402,5 +403,46 @@ describe("calcATR 排除除權息跳空", () => {
   it("非除息日不受影響", () => {
     expect(calcATR(rows, 1, new Set(["2026-07-14"]))).toBeCloseTo(8, 5);
     expect(calcATR(rows, 1, new Set())).toBeCloseTo(8, 5);
+  });
+});
+
+describe("buildPriceSeries", () => {
+  function dated(date: string, close: number): PriceRow {
+    return { date, close, max: close, min: close, Trading_Volume: 1_000_000 };
+  }
+
+  it("取最後 N 根的收盤價，由舊到新", () => {
+    const rows = [
+      dated("2026-01-02", 10),
+      dated("2026-01-03", 11),
+      dated("2026-01-06", 12),
+      dated("2026-01-07", 13),
+    ];
+    expect(buildPriceSeries(rows, 3)).toEqual({ from: "2026-01-03", closes: [11, 12, 13] });
+  });
+
+  it("資料比要求的少時就給全部，不補值", () => {
+    const rows = [dated("2026-01-02", 10), dated("2026-01-03", 11)];
+    expect(buildPriceSeries(rows, 60)).toEqual({ from: "2026-01-02", closes: [10, 11] });
+  });
+
+  it("不足兩根時回 null —— 一個點構不成走勢", () => {
+    expect(buildPriceSeries([dated("2026-01-02", 10)], 60)).toBeNull();
+    expect(buildPriceSeries([], 60)).toBeNull();
+  });
+
+  it("略過收盤價無效的列，日期跟著對齊", () => {
+    const rows = [
+      dated("2026-01-02", 10),
+      { date: "2026-01-03", close: Number.NaN, max: 1, min: 1, Trading_Volume: 0 },
+      dated("2026-01-06", 12),
+    ];
+    expect(buildPriceSeries(rows, 60)).toEqual({ from: "2026-01-02", closes: [10, 12] });
+  });
+
+  it("真實資料：8111 取 60 根", () => {
+    const s = buildPriceSeries(p8111, 60)!;
+    expect(s.closes).toHaveLength(60);
+    expect(s.closes[s.closes.length - 1]).toBe(p8111[p8111.length - 1]!.close);
   });
 });

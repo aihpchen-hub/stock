@@ -168,6 +168,10 @@ export const StockDetailResponse = zod.object({
   "swingLow": zod.number().nullish().describe('近20日最低價，作為停損位置的結構性對照'),
   "swingHigh": zod.number().nullish().describe('近20日最高價，作為壓力位置參考'),
   "avgVolume20": zod.number().nullish().describe('近20日平均成交量（股）'),
+  "priceSeries": zod.union([zod.object({
+  "from": zod.string().describe('最早一根的日期（YYYY-MM-DD）。沒有 x 軸的線必須說得出自己的區間。'),
+  "closes": zod.array(zod.number()).describe('由舊到新。長度依分析週期：1m→20、3m→60、6m→120 個交易日。')
+}).describe('價位地圖背後的收盤價走勢。只給收盤價，不給 OHLC —— 地圖的繪圖區在手機上約 117px，60 根蠟燭每根 1.95px，畫出來是一片糊 而不是 K 線；折線在任何密度下都誠實可讀，而高低點資訊已由 swingHigh／swingLow 的刻度線提供。收盤價陣列也小得多（實測 69 根 僅 0.3 KB），因此進得了 localStorage 快照，歷史紀錄也保有走勢。'),zod.null()]).optional().describe('價位地圖用的收盤價序列。資料不足（新股、停牌、抓取失敗）時為 null， 地圖退回原本的純刻度版本。'),
   "returns": zod.object({
   "d5": zod.number().nullish().describe('近 5 個交易日報酬（%）'),
   "d20": zod.number().nullish().describe('近 20 個交易日報酬（%）'),

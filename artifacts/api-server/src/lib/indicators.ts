@@ -87,6 +87,32 @@ export function calcATR(
   return recent.reduce((a, b) => a + b, 0) / period;
 }
 
+export interface PriceSeries {
+  /** 最早一根的日期。沒有 x 軸的線必須說得出自己的區間 */
+  from: string;
+  /** 收盤價，由舊到新 */
+  closes: number[];
+}
+
+/**
+ * 價位地圖要畫的收盤價序列。
+ *
+ * 只給收盤價，不給 OHLC：地圖的繪圖區在手機上只有約 117px，60 根蠟燭
+ * 每根 1.95px，畫出來是一片糊而不是 K 線。高低點資訊已由 swingHigh／
+ * swingLow 的刻度線提供。收盤價陣列也小得多 —— 實測 69 根只有 0.3 KB，
+ * 塞進 localStorage 快照完全不成問題，因此歷史快照也保有走勢。
+ *
+ * 不足兩根時回 null：一個點構不成走勢。
+ */
+export function buildPriceSeries(rows: PriceRow[], bars: number): PriceSeries | null {
+  const usable = rows.filter(
+    (r) => typeof r.date === "string" && typeof r.close === "number" && Number.isFinite(r.close),
+  );
+  const slice = bars > 0 ? usable.slice(-bars) : usable;
+  if (slice.length < 2) return null;
+  return { from: slice[0]!.date, closes: slice.map((r) => r.close) };
+}
+
 /** 近 N 根的最高價與最低價 —— 停損位置的結構性對照，以及壓力參考 */
 export function calcSwing(
   rows: PriceRow[],
