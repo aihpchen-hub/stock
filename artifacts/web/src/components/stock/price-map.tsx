@@ -1,5 +1,11 @@
 import React from 'react';
-import { buildPriceMap, priceMapNote, type PriceMapInput, type PriceMapKey } from '@/lib/priceMap';
+import {
+  buildPriceMap,
+  buildTrend,
+  priceMapNote,
+  type PriceMapInput,
+  type PriceMapKey,
+} from '@/lib/priceMap';
 
 /**
  * 價位地圖。
@@ -43,6 +49,10 @@ export function PriceMap(input: PriceMapInput) {
   const levels = buildPriceMap(input);
   if (levels.length === 0) return null;
 
+  // 走勢與刻度共用同一個軸（見 lib/priceMap 的 axisRange），因此線與刻度
+  // 必然對得起來。序列不足時為 null，這張圖就退回原本的純刻度版本。
+  const trend = buildTrend(input);
+
   const entryLow = levels.find((l) => l.key === 'entry_low');
   const entryHigh = levels.find((l) => l.key === 'entry_high');
   const note = priceMapNote(input.planKind);
@@ -57,7 +67,10 @@ export function PriceMap(input: PriceMapInput) {
         {pending ? (
           <span className="text-[10px] text-amber-500 font-medium">計畫尚未成立</span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/70">依真實比例</span>
+          <span className="text-[10px] text-muted-foreground/70">
+            {/* 沒有 x 軸的線必須說得出自己畫的是多久 */}
+            {trend ? `近 ${trend.bars} 個交易日 · 依真實比例` : '依真實比例'}
+          </span>
         )}
       </div>
 
@@ -66,6 +79,43 @@ export function PriceMap(input: PriceMapInput) {
           絕對定位以 padding box 為準，留白必須加在外層才有效。 */}
       <div className="py-3">
         <div className="relative h-[300px]">
+          {/* 走勢線畫在最底層，刻度與標籤蓋在它上面。
+              preserveAspectRatio="none" 讓 viewBox 直接對應容器；
+              non-scaling-stroke 避免線寬被非等比縮放拉扁。
+              aria-hidden 是因為所有數值在右側標籤欄都有文字版本。 */}
+          {trend && (
+            <svg
+              className="absolute inset-y-0 left-0 w-[42%]"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              <path
+                d={trend.areaPath}
+                className={
+                  trend.direction === 'down'
+                    ? 'fill-down/10'
+                    : trend.direction === 'up'
+                      ? 'fill-up/10'
+                      : 'fill-muted-foreground/10'
+                }
+              />
+              <polyline
+                points={trend.points}
+                fill="none"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                className={
+                  trend.direction === 'down'
+                    ? 'stroke-down'
+                    : trend.direction === 'up'
+                      ? 'stroke-up'
+                      : 'stroke-muted-foreground'
+                }
+              />
+            </svg>
+          )}
+
           {/* 進場區畫成色帶而非兩條線 —— 它是一段可以進場的範圍，不是兩個價位 */}
           {entryLow && entryHigh && entryHigh.pct > entryLow.pct && (
             <div

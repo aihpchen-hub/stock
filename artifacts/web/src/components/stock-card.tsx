@@ -158,6 +158,7 @@ export function StockCard({
     valuation,
     dividend,
     degraded,
+    priceSeries,
   } = detail;
 
   // 舊快照存的時候還沒有 advice 這個欄位。deriveAdvice 是純函式，
@@ -415,6 +416,7 @@ export function StockCard({
               ma60={ma60}
               swingHigh={swingHigh}
               swingLow={swingLow}
+              priceSeries={priceSeries}
             />
           )}
 
