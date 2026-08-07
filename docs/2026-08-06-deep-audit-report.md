@@ -601,12 +601,12 @@ export function wilson95(k: number, n: number): [number, number] | null {
 
 ### 值得考慮的產品方向（非缺陷）
 
-| 方向 | 理由 |
-|---|---|
-| **R-16｜K 線圖** | `chart.tsx`（366 行 recharts 封裝）已經在專案裡但從未使用。`price-map.tsx` 已經解決了「價位相對位置」，缺的是「走勢形狀」。需要 API 增加 OHLC 序列——`stock.ts` 本來就抓了完整日線，只是沒回傳。**這是投入產出比最高的一項功能**。 |
-| **R-17｜Payload 分層** | `StockDetailResult` 有 50+ 欄位，把「幾乎不變」（公司名、官方產業別、股利歷史、估值區間、財報）與「會變」（現價、成交量、法人）混在同一個物件。日線延遲一天的前提下現在這樣可以，但**一旦想加即時報價就是重寫**。建議先拆成 `static / daily / realtime` 三層。 |
-| **R-18｜批次端點** | 把 5 檔的 stock 請求改成 `/api/stocks?codes=…`，內部用併發上限 4 的佇列並對 402 做退避重試。目前前後端都沒有任何節流、佇列或退避——這是 J-2 的根因。 |
-| **R-19｜元件測試** | 567 個測試沒有一個碰到 React。本報告 8 項 High 沒有一項會被現有測試抓到。建議先補三個：`StockCard` 在 `detail === undefined` 時的行為、`planPosition` 的淨值上限、`Analysis` 頁在部分 query 失敗時的渲染。 |
+| 方向 | 理由 | 後續 |
+|---|---|---|
+| **R-16｜K 線圖** | `chart.tsx`（366 行 recharts 封裝）已經在專案裡但從未使用。`price-map.tsx` 已經解決了「價位相對位置」，缺的是「走勢形狀」。需要 API 增加 OHLC 序列——`stock.ts` 本來就抓了完整日線，只是沒回傳。**這是投入產出比最高的一項功能**。 | ✅ **2026-08-07 完成**，但**不是 K 線**：實測繪圖區在手機上只有 117px，60 根蠟燭每根 1.95px。改為在 price-map 背後畫收盤價折線。見 [spec](superpowers/specs/2026-08-07-price-map-trend-design.md) |
+| **R-17｜Payload 分層** | `StockDetailResult` 有 50+ 欄位，把「幾乎不變」（公司名、官方產業別、股利歷史、估值區間、財報）與「會變」（現價、成交量、法人）混在同一個物件。日線延遲一天的前提下現在這樣可以，但**一旦想加即時報價就是重寫**。建議先拆成 `static / daily / realtime` 三層。 | ❌ **2026-08-07 評估後不做**。實測「真正幾乎不變」的部分只佔 payload 4.3%（185 / 4,328 bytes），抽層只省 45 KB／1.03 MB，而快照離 5 MB 上限還很遠。**本報告這一項的前提不成立**，理由詳見 [spec](superpowers/specs/2026-08-07-finmind-request-budget-design.md) |
+| **R-18｜批次端點** | 把 5 檔的 stock 請求改成 `/api/stocks?codes=…`，內部用併發上限 4 的佇列並對 402 做退避重試。目前前後端都沒有任何節流、佇列或退避——這是 J-2 的根因。 | ⚠️ **2026-08-07 改以另一種方式完成**。402 是**每小時額度**用盡而非瞬時併發，批次化不減少總量卻會廢掉逐卡重試。改為減少請求本身：快取 `resolveStock`、估值與股利移到延後載入。**36 → 26／21**（−28%／−42%） |
+| **R-19｜元件測試** | 567 個測試沒有一個碰到 React。本報告 8 項 High 沒有一項會被現有測試抓到。建議先補三個：`StockCard` 在 `detail === undefined` 時的行為、`planPosition` 的淨值上限、`Analysis` 頁在部分 query 失敗時的渲染。 | ⚠️ 部分達成：把判斷從元件抽成純函式（`lib/position`、`lib/apiError`、`lib/verifyStats`、`lib/format`、`buildTrend`）並全部測到，但**仍無元件測試基礎建設**（無 jsdom／testing-library） |
 
 ---
 
