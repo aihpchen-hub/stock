@@ -1,4 +1,5 @@
 import { lotEconomics, type LotEconomics } from './fees';
+import { planOddLot, type OddLotPlan } from './oddLot';
 import { planPosition, type PositionPlan, type RiskSettings } from './settings';
 
 export type PositionInput = {
@@ -17,6 +18,13 @@ export type PositionView = {
   economics: LotEconomics | null;
   /** 扣費後的實際賠率。停損距離為 0 時為 null，不輸出 Infinity */
   netRiskReward: number | null;
+  /**
+   * 買不到 1 張時的零股建議，否則為 null。
+   *
+   * 與 position.lots > 0 互斥：算得出整張就不給零股，
+   * 否則同一張卡片會同時出現兩個「建議買多少」。測試鎖住這個不變式。
+   */
+  oddLot: OddLotPlan | null;
 };
 
 export function planPositionFor(input: PositionInput): PositionView {
@@ -51,5 +59,17 @@ export function planPositionFor(input: PositionInput): PositionView {
       ? economics.netRewardPerLot / economics.netRiskPerLot
       : null;
 
-  return { position, economics, netRiskReward };
+  const oddLot =
+    position && position.lots === 0
+      ? planOddLot({
+          riskBudget: settings.riskBudget,
+          capital: settings.capital,
+          entryPrice: entryHigh,
+          stopLoss,
+          maxPositionPct: settings.maxPositionPct,
+          feeDiscount: settings.feeDiscount,
+        })
+      : null;
+
+  return { position, economics, netRiskReward, oddLot };
 }

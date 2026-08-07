@@ -155,3 +155,41 @@ describe('planPositionFor 的扣費後賠率', () => {
     expect(view.netRiskReward === null || Number.isFinite(view.netRiskReward)).toBe(true);
   });
 });
+
+/**
+ * 一張 100 萬的股票配上預設設定（資金 100 萬、單檔上限 30%），
+ * 整張路徑一定算出 0 張。這是零股接手的唯一情況。
+ */
+const ODD = { entryHigh: 1000, stopLoss: 915.4, takeProfit: 1200, firstTarget: 1050 };
+
+describe('零股建議', () => {
+  it('算得出整張時不給零股建議 —— 兩者互斥', () => {
+    // 同一張卡片同時出現「買 3 張」與「買 250 股」的話，使用者不知道該照哪個做。
+    const view = planPositionFor({
+      entryHigh: CASE.entryHigh,
+      stopLoss: CASE.stopLoss,
+      takeProfit: CASE.takeProfit,
+      firstTarget: CASE.firstTarget,
+      riskPerLot: CASE.grossRiskPerLot,
+      settings,
+    });
+    expect(view.position!.lots).toBeGreaterThan(0);
+    expect(view.oddLot).toBeNull();
+  });
+
+  it('買不到 1 張時給出股數', () => {
+    const view = planPositionFor({ ...ODD, settings: DEFAULT_RISK_SETTINGS });
+    expect(view.position!.lots).toBe(0);
+    expect(view.oddLot!.shares).toBe(222);
+  });
+
+  it('零股的最壞虧損同樣不超過使用者設定的單筆風險上限', () => {
+    const view = planPositionFor({ ...ODD, settings: DEFAULT_RISK_SETTINGS });
+    expect(view.oddLot!.risk).toBeLessThanOrEqual(DEFAULT_RISK_SETTINGS.riskBudget);
+  });
+
+  it('零股用的是進場區上緣，與整張路徑同一組基準', () => {
+    const view = planPositionFor({ ...ODD, settings: DEFAULT_RISK_SETTINGS });
+    expect(view.oddLot!.cost).toBe(view.oddLot!.shares * ODD.entryHigh);
+  });
+});
