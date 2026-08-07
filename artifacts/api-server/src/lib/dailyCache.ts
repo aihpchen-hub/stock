@@ -73,6 +73,17 @@ export function stockCacheKey(code: string, period: string): string {
 }
 
 /**
+ * 公司基本資料的快取鍵。
+ *
+ * 公司簡稱與官方產業別是全系統最靜態的資料（一年變動幾次），卻是先前唯一
+ * 每次請求都重抓的 —— 一次分析五檔就是五個 FinMind 請求，而 FinMind 免費層
+ * 的限制是每小時總量。以日失效已經遠比原本保守。
+ */
+export function stockInfoCacheKey(code: string): string {
+  return `stockinfo|v1|${code.trim().toLowerCase()}`;
+}
+
+/**
  * 財報資料的快取鍵。
  *
  * 不帶週期：財報與使用者選的持有期無關。仍以日失效即可 —— 財報是季頻，
