@@ -159,6 +159,21 @@ export type PositionPlan = {
 };
 
 /**
+ * 把單檔上限夾到允許範圍，超出或非數值時退回預設。
+ *
+ * 抽成獨立函式是因為整張與零股兩條路徑都要用它 —— 複製一份的話，
+ * 兩邊的夾擠規則遲早會分岔，而分岔的症狀是「同一組設定在兩條路徑算出不同的上限」，
+ * 那種錯不會報錯。
+ */
+export function clampPositionPct(value: number | undefined): number {
+  return Number.isFinite(value) &&
+    (value as number) >= MIN_POSITION_PCT &&
+    (value as number) <= MAX_ALLOWED_POSITION_PCT
+    ? (value as number)
+    : DEFAULT_MAX_POSITION_PCT;
+}
+
+/**
  * 同時受風險與資金兩個上限節制，取較嚴格者。
  *
  * 只看風險會出事：停損很近的高價股算出來可以買很多張，但一張就要數十萬，
@@ -179,12 +194,7 @@ export function planPosition(opts: {
   if (!Number.isFinite(riskBudget) || riskBudget <= 0) return null;
   if (!Number.isFinite(capital) || capital <= 0) return null;
 
-  const pct =
-    Number.isFinite(opts.maxPositionPct) &&
-    (opts.maxPositionPct as number) >= MIN_POSITION_PCT &&
-    (opts.maxPositionPct as number) <= MAX_ALLOWED_POSITION_PCT
-      ? (opts.maxPositionPct as number)
-      : DEFAULT_MAX_POSITION_PCT;
+  const pct = clampPositionPct(opts.maxPositionPct);
 
   const costPerLot = entryPrice * SHARES_PER_LOT;
   const capitalCap = capital * pct;
