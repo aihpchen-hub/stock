@@ -185,7 +185,7 @@ export function StockCard({
   // 分開接線正是「建議張數用毛值算、最壞會賠用淨值印」那個缺陷的來源 ——
   // 畫面會印出超過使用者自訂上限的虧損金額，同時又顯示「已達單筆風險上限」。
   // 判斷邏輯在 @/lib/position，有測試鎖住「最壞虧損 ≤ 風險預算」這個不變式。
-  const { position, economics, netRiskReward } = planPositionFor({
+  const { position, economics, netRiskReward, oddLot } = planPositionFor({
     entryHigh,
     stopLoss,
     takeProfit,
@@ -314,14 +314,20 @@ export function StockCard({
         {shows('position_sizing') && position && economics && effectiveAdvice.planKind !== 'none' && (
           <div className="flex items-baseline justify-between gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
             <span className="text-sm text-muted-foreground">
-              {position.lots > 0 ? `照建議買 ${position.lots} 張，最壞會賠` : '每張最壞會賠'}
+              {position.lots > 0
+                ? `照建議買 ${position.lots} 張，最壞會賠`
+                : oddLot
+                  ? `照建議買 ${oddLot.shares.toLocaleString()} 股，最壞會賠`
+                  : '每張最壞會賠'}
             </span>
+            {/* 零股用 oddLot.risk，不是 netRiskPerLot × 股數 ÷ 1000 ——
+                手續費低消是固定成本，縮放會低估。 */}
             <span className="text-xl font-bold font-mono text-amber-500">
               NT${' '}
               {Math.round(
                 position.lots > 0
                   ? economics.netRiskPerLot * position.lots
-                  : economics.netRiskPerLot,
+                  : (oddLot?.risk ?? economics.netRiskPerLot),
               ).toLocaleString()}
             </span>
           </div>
@@ -550,12 +556,19 @@ export function StockCard({
               <div className="bg-card border border-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center border-b border-border pb-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">建議張數</div>
-                    <div className="text-2xl font-bold">{position.lots} <span className="text-sm font-normal">張</span></div>
+                    <div className="text-xs text-muted-foreground">
+                      {oddLot ? '建議股數' : '建議張數'}
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {oddLot ? oddLot.shares.toLocaleString() : position.lots}{' '}
+                      <span className="text-sm font-normal">{oddLot ? '股' : '張'}</span>
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground">投入金額</div>
-                    <div className="font-mono font-medium">NT$ {position.cost.toLocaleString()}</div>
+                    <div className="font-mono font-medium">
+                      NT$ {(oddLot ? oddLot.cost : position.cost).toLocaleString()}
+                    </div>
                   </div>
                 </div>
 
@@ -585,7 +598,13 @@ export function StockCard({
                       </strong>
                     </span>
                     <span className="text-muted-foreground flex items-center gap-1">
-                      單張最大虧損: <strong className="text-amber-500 font-mono">NT$ {economics.netRiskPerLot.toLocaleString(undefined, {maximumFractionDigits:0})}</strong>
+                      {oddLot ? '這個部位最大虧損' : '單張最大虧損'}:{' '}
+                      <strong className="text-amber-500 font-mono">
+                        NT${' '}
+                        {(oddLot ? oddLot.risk : economics.netRiskPerLot).toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}
+                      </strong>
                     </span>
                   </div>
                 )}
@@ -657,8 +676,31 @@ export function StockCard({
                 )}
                 {/* 0 張最需要解釋，先前卻是唯一不解釋的情況 —— 上面兩個提示都被
                     lots > 0 擋掉，使用者只看到「0 張／NT$ 0」，不知道是系統壞了、
-                    標的不好、還是自己的設定買不起。這裡把 limitedBy 換成具體門檻。 */}
-                {position.lots === 0 && (
+                    標的不好、還是自己的設定買不起。現在買不到整張時改給零股，
+                    但仍要說明為什麼買不到 —— 那是使用者理解自己設定的唯一線索。
+
+                    上面的流動性警示對零股不適用，條件裡的 lots > 0 已經擋掉了：
+                    它的分母 avgVolume20 是整股市場的成交量，拿來衡量零股掛單
+                    能不能成交是錯的尺。零股的流動性提醒改寫在這一段裡。 */}
+                {position.lots === 0 && oddLot && (
+                  <div className="text-xs text-amber-500/90 bg-amber-500/10 p-2 rounded space-y-1">
+                    <div>
+                      ⚠️ 這檔買不到 1 張：
+                      {position.limitedBy === 'risk'
+                        ? `每張最大虧損 NT$ ${Math.round(economics.netRiskPerLot).toLocaleString()}，超過你設定的單筆風險上限 NT$ ${settings.riskBudget.toLocaleString()}`
+                        : `1 張成本 NT$ ${Math.round(position.costPerLot).toLocaleString()}，超過單檔可投入上限 NT$ ${Math.round(position.capitalCap).toLocaleString()}（資金 ${settings.capital.toLocaleString()} × ${Math.round(settings.maxPositionPct * 100)}%）`}
+                      。上方為零股建議。
+                    </div>
+                    {/* 成本佔比不設門檻、不擋下建議 —— 與流動性警示同一個做法：
+                        陳述事實比例，由使用者自行判斷。部位小的時候 NT$20 手續費
+                        低消會接管，佔比可以從 0.585% 一路跳到 4.3%。 */}
+                    <div className="text-muted-foreground">
+                      來回手續費與證交稅約當部位金額的 {oddLot.costPct.toFixed(2)}%。
+                      零股是獨立撮合市場，成交機會低於整股。
+                    </div>
+                  </div>
+                )}
+                {position.lots === 0 && !oddLot && (
                   <div className="text-xs text-amber-500/90 bg-amber-500/10 p-2 rounded space-y-1">
                     {position.limitedBy === 'risk' ? (
                       <>
@@ -670,6 +712,7 @@ export function StockCard({
                         <div className="text-muted-foreground">
                           要買 1 張，單筆風險上限需提高到 NT${' '}
                           {Math.ceil(economics.netRiskPerLot).toLocaleString()} 以上；或改用較短的分析週期（停損較近）。
+                          連 1 股的零股也超出上限。
                         </div>
                       </>
                     ) : (
@@ -681,7 +724,7 @@ export function StockCard({
                           （資金 {settings.capital.toLocaleString()} × {Math.round(settings.maxPositionPct * 100)}%）。
                         </div>
                         <div className="text-muted-foreground">
-                          台股一張 1000 股，本工具尚未支援零股。
+                          連 1 股的零股也超過這個上限。
                         </div>
                       </>
                     )}
