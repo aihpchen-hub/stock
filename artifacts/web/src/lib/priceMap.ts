@@ -46,6 +46,11 @@ export interface PriceMapInput {
   trailingStop?: number | null;
   swingHigh?: number | null;
   swingLow?: number | null;
+  /**
+   * 收盤價序列。有值時軸範圍必須涵蓋它 —— 否則超出範圍的收盤價會被裁掉，
+   * 那是一張說謊的圖，而它看起來仍然像是真的。
+   */
+  priceSeries?: { from: string; closes: number[] } | null;
 }
 
 export interface PriceMapLevel {
@@ -148,7 +153,8 @@ const PLAN_KEYS: ReadonlySet<PriceMapKey> = new Set<PriceMapKey>([
   'trailing_stop',
 ]);
 
-export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
+/** 這張圖上要畫的價位，由低到高 */
+function pickedLevels(input: PriceMapInput): Array<[PriceMapKey, number]> {
   const showPlan = input.planKind !== 'none';
 
   const candidates: Array<[PriceMapKey, number | null | undefined]> = [
@@ -165,23 +171,53 @@ export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
     ['swing_low', input.swingLow],
   ];
 
-  const picked = candidates
+  return candidates
     .filter(([key]) => showPlan || !PLAN_KEYS.has(key))
     .filter((entry): entry is [PriceMapKey, number] => Number.isFinite(entry[1]))
     .sort((a, b) => a[1] - b[1]);
+}
 
+/** 序列裡可用的收盤價。任一非有限值即視為整段不可用 —— 半條線比沒有線更糟 */
+function usableCloses(input: PriceMapInput): number[] | null {
+  const closes = input.priceSeries?.closes;
+  if (!closes || closes.length < 2) return null;
+  return closes.every((c) => Number.isFinite(c)) ? closes : null;
+}
+
+/**
+ * 軸的上下界，由價位與收盤價序列**共同**決定。
+ *
+ * `buildPriceMap` 與 `buildTrend` 都呼叫它，因此走勢線與價位刻度不可能
+ * 對不起來 —— 那比不畫還糟：一條指著錯位置的線看起來仍然像是真的。
+ *
+ * 代價是有序列時價位刻度會比純刻度版本擠（60 根的價格區間通常大於計畫價位
+ * 的跨度）。那是換到走勢資訊必須付的。
+ */
+function axisRange(input: PriceMapInput): { min: number; max: number } | null {
+  const values = pickedLevels(input).map(([, value]) => value);
+  const closes = usableCloses(input);
+  if (closes) values.push(...closes);
+  if (values.length === 0) return null;
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
+
+/** 價格 → 0~100 的軸位置（由下往上） */
+function toPct(value: number, axis: { min: number; max: number }): number {
+  const span = axis.max - axis.min;
+  // 全部價位相同（或只有一個）時除數為零 —— 放中間，不製造 NaN
+  if (span === 0) return 50;
+  return AXIS_PADDING + ((value - axis.min) / span) * (100 - AXIS_PADDING * 2);
+}
+
+export function buildPriceMap(input: PriceMapInput): PriceMapLevel[] {
+  const picked = pickedLevels(input);
   if (picked.length === 0) return [];
 
-  const values = picked.map(([, value]) => value);
-  const min = values[0]!;
-  const max = values[values.length - 1]!;
-  const span = max - min;
-
+  const axis = axisRange(input)!;
   const current = Number.isFinite(input.currentPrice) ? (input.currentPrice as number) : null;
 
   const levels: PriceMapLevel[] = picked.map(([key, value]) => {
-    // 全部價位相同（或只有一個）時除數為零 —— 放中間，不製造 NaN
-    const pct = span === 0 ? 50 : AXIS_PADDING + ((value - min) / span) * (100 - AXIS_PADDING * 2);
+    const pct = toPct(value, axis);
     return {
       key,
       label: (input.glossary === 'plain' ? PLAIN_LABELS[key] : undefined) ?? LABELS[key],
@@ -221,4 +257,54 @@ function spreadLabels(levels: PriceMapLevel[]): PriceMapLevel[] {
   }
 
   return levels;
+}
+
+export interface Trend {
+  /** SVG polyline 的 points，座標系 0~100 × 0~100（y 由上往下，與 SVG 一致） */
+  points: string;
+  /** 面積填色用的封閉路徑 */
+  areaPath: string;
+  /** 首尾比較。線的顏色走台股慣例：漲紅跌綠 */
+  direction: 'up' | 'down' | 'flat';
+  /** 最早一根的日期。沒有 x 軸的線必須說得出自己的區間 */
+  from: string;
+  bars: number;
+}
+
+/** SVG 座標留兩位小數就夠，序列長時能省下不少字串 */
+const round = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * 價位地圖背後的收盤價走勢。
+ *
+ * 同樣是現價 104、月線 106，一路陰跌下來與剛從 90 拉上來是完全不同的處境，
+ * 而純刻度的地圖上這兩者長得一模一樣 —— 那正是這張圖先前答不出來的事。
+ *
+ * y 用的是與價位刻度同一個 `axisRange`。那是這個函式唯一真正重要的性質，
+ * 也是測試裡「等於月線的收盤價其 y 必須等於月線刻度」那一條在守的東西。
+ */
+export function buildTrend(input: PriceMapInput): Trend | null {
+  const closes = usableCloses(input);
+  if (!closes) return null;
+  const axis = axisRange(input);
+  if (!axis) return null;
+
+  const lastIndex = closes.length - 1;
+  const coords = closes.map((close, i) => {
+    const x = (i / lastIndex) * 100;
+    // pct 由下往上，SVG 的 y 由上往下
+    const y = 100 - toPct(close, axis);
+    return [x, y] as const;
+  });
+
+  const points = coords.map(([x, y]) => `${round(x)},${round(y)}`).join(' ');
+  const areaPath = `M ${round(coords[0]![0])},100 ${coords
+    .map(([x, y]) => `L ${round(x)},${round(y)}`)
+    .join(' ')} L ${round(coords[lastIndex]![0])},100 Z`;
+
+  const first = closes[0]!;
+  const last = closes[lastIndex]!;
+  const direction = last > first ? 'up' : last < first ? 'down' : 'flat';
+
+  return { points, areaPath, direction, from: input.priceSeries!.from, bars: closes.length };
 }

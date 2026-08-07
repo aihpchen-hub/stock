@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPriceMap, LABEL_MIN_GAP, priceMapNote, type PriceMapInput } from './priceMap';
+import {
+  buildPriceMap,
+  buildTrend,
+  LABEL_MIN_GAP,
+  priceMapNote,
+  type PriceMapInput,
+} from './priceMap';
 
 /** 一份價位齊全、計畫成立的輸入 */
 const FULL: PriceMapInput = {
@@ -251,5 +257,91 @@ describe('標籤去疊', () => {
     }
     const gaps = levels.slice(1).map((l, i) => l.labelPct - levels[i]!.labelPct);
     for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(LABEL_MIN_GAP - 1e-9);
+  });
+});
+
+describe('buildTrend', () => {
+  const base: PriceMapInput = {
+    planKind: 'immediate',
+    currentPrice: 100,
+    entryLow: 98,
+    entryHigh: 100,
+    stopLoss: 92,
+    takeProfit: 115,
+  };
+
+  it('沒有序列時回 null', () => {
+    expect(buildTrend(base)).toBeNull();
+    expect(buildTrend({ ...base, priceSeries: null })).toBeNull();
+  });
+
+  it('只有一個點時回 null —— 一個點構不成走勢', () => {
+    expect(buildTrend({ ...base, priceSeries: { from: '2026-05-08', closes: [100] } })).toBeNull();
+  });
+
+  it('點數等於收盤價數，首尾 x 為 0 與 100', () => {
+    const t = buildTrend({
+      ...base,
+      priceSeries: { from: '2026-05-08', closes: [95, 100, 105] },
+    })!;
+    const pts = t.points.split(' ').map((p) => p.split(',').map(Number));
+    expect(pts).toHaveLength(3);
+    expect(pts[0]![0]).toBeCloseTo(0, 5);
+    expect(pts[2]![0]).toBeCloseTo(100, 5);
+    expect(t.bars).toBe(3);
+    expect(t.from).toBe('2026-05-08');
+  });
+
+  it('方向由首尾比較決定，走台股慣例', () => {
+    const up = buildTrend({ ...base, priceSeries: { from: 'x', closes: [90, 110] } })!;
+    const down = buildTrend({ ...base, priceSeries: { from: 'x', closes: [110, 90] } })!;
+    const flat = buildTrend({ ...base, priceSeries: { from: 'x', closes: [100, 100] } })!;
+    expect(up.direction).toBe('up');
+    expect(down.direction).toBe('down');
+    expect(flat.direction).toBe('flat');
+  });
+
+  it('走勢線與價位刻度共用同一個軸 —— 等於月線的收盤價，其 y 必須等於月線刻度', () => {
+    // 這是整個功能的正確性核心：兩者對不起來的話，
+    // 圖會指著錯的位置，而它看起來仍然像是真的。
+    const input: PriceMapInput = {
+      ...base,
+      ma20: 104,
+      priceSeries: { from: 'x', closes: [92, 104, 115] },
+    };
+    const ma20 = buildPriceMap(input).find((l) => l.key === 'ma20')!;
+    const t = buildTrend(input)!;
+    const secondY = Number(t.points.split(' ')[1]!.split(',')[1]);
+    // pct 由下往上、SVG y 由上往下，因此互補。
+    // 容許 0.05 的誤差：座標刻意只留兩位小數（序列長時能省下不少字串），
+    // 而 0.01 在 0~100 的座標系對上 300px 高的容器是 0.03px。
+    expect(100 - secondY).toBeCloseTo(ma20.pct, 1);
+  });
+
+  it('序列超出價位範圍時，價位刻度仍落在 0~100 內（軸有涵蓋序列，線不被裁切）', () => {
+    const input: PriceMapInput = { ...base, priceSeries: { from: 'x', closes: [40, 200] } };
+    for (const level of buildPriceMap(input)) {
+      expect(level.pct).toBeGreaterThanOrEqual(0);
+      expect(level.pct).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('序列完全在價位範圍內時不無故放大軸', () => {
+    const without = buildPriceMap(base);
+    const withSeries = buildPriceMap({
+      ...base,
+      priceSeries: { from: 'x', closes: [95, 100, 105] },
+    });
+    expect(withSeries.map((l) => l.pct)).toEqual(without.map((l) => l.pct));
+  });
+
+  it('全部同值（一價到底）不產生 NaN', () => {
+    const t = buildTrend({ ...base, priceSeries: { from: 'x', closes: [100, 100, 100] } })!;
+    expect(t.points).not.toContain('NaN');
+    expect(t.areaPath).not.toContain('NaN');
+  });
+
+  it('非有限值的序列回 null', () => {
+    expect(buildTrend({ ...base, priceSeries: { from: 'x', closes: [100, Number.NaN] } })).toBeNull();
   });
 });
